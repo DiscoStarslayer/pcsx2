@@ -176,6 +176,7 @@ static u32 s_frame_advance_count = 0;
 static u32 s_mxcsr_saved;
 static bool s_fast_boot_requested = false;
 static bool s_gs_open_on_initialize = false;
+static u32 s_cdvd_offset = 0;
 
 static LimiterModeType s_limiter_mode = LimiterModeType::Nominal;
 static s64 s_limiter_ticks_per_frame = 0;
@@ -325,6 +326,12 @@ u32 VMManager::GetCurrentCRC()
 {
 	std::unique_lock lock(s_info_mutex);
 	return s_current_crc;
+}
+
+u32 VMManager::GetCdvdOffset()
+{
+	std::unique_lock lock(s_info_mutex);
+	return s_cdvd_offset;
 }
 
 bool VMManager::Internal::CPUThreadInitialize()
@@ -519,7 +526,7 @@ void VMManager::ApplyGameFixes()
 
 	game->applyGameFixes(EmuConfig, EmuConfig.EnableGameFixes);
 	game->applyGSHardwareFixes(EmuConfig.GS);
-	
+
 	// Re-remove upscaling fixes, make sure they don't apply at native res.
 	// We do this in LoadCoreSettings(), but game fixes get applied afterwards because of the unsafe warning.
 	EmuConfig.GS.MaskUpscalingHacks();
@@ -645,6 +652,7 @@ void VMManager::Internal::UpdateEmuFolders()
 			std::string memcardFilters = "";
 			if (const GameDatabaseSchema::GameEntry* game = GameDatabase::findGame(s_disc_serial))
 			{
+				s_cdvd_offset = game->cdvdOffset;
 				memcardFilters = game->memcardFiltersAsString();
 			}
 
@@ -873,6 +881,7 @@ void VMManager::UpdateDiscDetails(bool booting)
 					title = std::move(game_title);
 				}
 
+				s_cdvd_offset = game->cdvdOffset;
 				memcardFilters = game->memcardFiltersAsString();
 			}
 			else
@@ -1212,7 +1221,7 @@ bool VMManager::Initialize(VMBootParameters boot_params)
 	}
 	ScopedGuard close_spu2(&SPU2::Close);
 
-	
+
 	Console.WriteLn("Initializing Pad...");
 	if (!Pad::Initialize())
 	{
@@ -2236,7 +2245,7 @@ void VMManager::CheckForGSConfigChanges(const Pcsx2Config& old_config)
 	}
 	else if (EmuConfig.GS.VsyncEnable != old_config.GS.VsyncEnable)
 	{
-		// Still need to update target speed, because of sync-to-host-refresh.	
+		// Still need to update target speed, because of sync-to-host-refresh.
 		UpdateTargetSpeed();
 	}
 

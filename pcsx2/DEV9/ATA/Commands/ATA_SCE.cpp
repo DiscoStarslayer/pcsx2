@@ -18,6 +18,8 @@
 #include "DEV9/ATA/ATA.h"
 #include "DEV9/DEV9.h"
 
+#include "common/FileSystem.h"
+
 void ATA::HDD_SCE()
 {
 	DevCon.WriteLn("DEV9: HDD_SCE SONY-SPECIFIC SECURITY CONTROL COMMAND %x", regFeature);
@@ -82,6 +84,22 @@ void ATA::SCE_IDENTIFY_DRIVE()
 	// 0x80 and up - zero filled
 
 	// TODO: if exists *.hddid file (size - 128-512 bytes) along with HDD image, replace generic sceSec with its content
+	{
+		//GHC uses UTF8 on all platforms
+		std::string hddPath(EmuConfig.DEV9.HddFile);
+
+		if (hddPath.empty())
+			EmuConfig.DEV9.HddEnable = false;
+
+		if (!Path::IsAbsolute(hddPath))
+			hddPath = Path::Combine(EmuFolders::Settings, hddPath);
+
+		hddPath += ".hddid";
+
+		auto fp = FileSystem::OpenManagedCFile(hddPath.c_str(), "rb");
+		if (fp && FileSystem::FSize64(fp.get()) >= 128)
+			std::fread(sceSec, 1, 128, fp.get());
+	}
 
 	pioDRQEndTransferFunc = nullptr;
 	DRQCmdPIODataToHost(sceSec, 256 * 2, 0, 256 * 2, true);
