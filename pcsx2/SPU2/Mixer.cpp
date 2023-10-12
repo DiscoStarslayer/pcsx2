@@ -603,6 +603,19 @@ StereoOut32 V_Core::Mix(const VoiceMixSet& inVoices, const StereoOut32& Input, c
 	return TD + ApplyVolume(RV, FxVol);
 }
 
+static StereoOut32 DCFilter(StereoOut32 input) {
+	// A simple DC blocking high-pass filter
+	// Implementation from http://peabody.sapp.org/class/dmp2/lab/dcblock/
+	// The magic number 0x7f5c is ceil(INT16_MAX * 0.995)
+	StereoOut32 output;
+	output.Left = (input.Left - DCFilterIn.Left + clamp_mix((0x7f5c * DCFilterOut.Left) >> 15));
+	output.Right = (input.Right - DCFilterIn.Right + clamp_mix((0x7f5c * DCFilterOut.Right) >> 15));
+
+	DCFilterIn = input;
+	DCFilterOut = output;
+	return output;
+}
+
 // used to throttle the output rate of cache stat reports
 static int p_cachestat_counter = 0;
 
@@ -678,8 +691,8 @@ __forceinline
 	// Edit: I'm sorry Jake, but I know of no good audio system that arbitrary distorts and clips
 	// output by design.
 	// Good thing though that this code gets the volume exactly right, as per tests :)
+	Out = DCFilter(Out);
 	Out = clamp_mix(Out);
-
 	SndBuffer::Write(StereoOut16(Out));
 
 	// Update AutoDMA output positioning

@@ -246,6 +246,8 @@ PAPX-90506:
     eeClampMode: 3 # Fixes textbox.
   gsHWFixes:
     roundSprite: 2 # Fixes font artifacts.
+    cpuSpriteRenderBW: 2 # Fixes lines in geometry.
+    cpuSpriteRenderLevel: 2 # Needed for above.
 PAPX-90507:
   name: "Official Disc 2003"
   region: "NTSC-J"
@@ -1373,6 +1375,8 @@ SCAJ-20111:
 SCAJ-20112:
   name: "Tales of Rebirth"
   region: "NTSC-Unk"
+  speedHacks:
+    mvuFlag: 0 # Fixes graphical corruptions.
 SCAJ-20113:
   name: "Dragon Quest & Final Fantasy in Itadaki Street"
   region: "NTSC-Unk"
@@ -1780,7 +1784,7 @@ SCAJ-20179:
   region: "NTSC-Unk"
   gsHWFixes:
     autoFlush: 2 # Fixes shadows in cutscenes.
-    halfPixelOffset: 1 # Fixes lighting misalignment and reduces ground shadows (probably texture cache issue).
+    halfPixelOffset: 2 # Fixes lighting misalignment and reduces ground shadows (probably texture cache issue).
     roundSprite: 2 # Fixes font artifacts.
     textureInsideRT: 1 # Fixes bad crystal surfaces.
 SCAJ-20180:
@@ -1788,7 +1792,7 @@ SCAJ-20180:
   region: "NTSC-Unk"
   gsHWFixes:
     autoFlush: 2 # Fixes shadows in cutscenes.
-    halfPixelOffset: 1 # Fixes lighting misalignment and reduces ground shadows (probably texture cache issue).
+    halfPixelOffset: 2 # Fixes lighting misalignment and reduces ground shadows (probably texture cache issue).
     roundSprite: 2 # Fixes font artifacts.
     textureInsideRT: 1 # Fixes bad crystal surfaces.
 SCAJ-20181:
@@ -2094,8 +2098,6 @@ SCCS-40022:
 SCCS-60001:
   name: "Sakura Taisen - Atsuki Chishio Ni"
   region: "NTSC-C"
-  gsHWFixes:
-    getSkipCount: "GSC_SakuraTaisen"
 SCCS-60002:
   name: "Gran Turismo 4 [Review Copy]"
   region: "NTSC-C"
@@ -4381,6 +4383,8 @@ SCES-51190:
     eeClampMode: 3 # Fixes textbox.
   gsHWFixes:
     roundSprite: 2 # Fixes font artifacts.
+    cpuSpriteRenderBW: 2 # Fixes lines in geometry.
+    cpuSpriteRenderLevel: 2 # Needed for above.
 SCES-51224:
   name: "War of the Monsters"
   region: "PAL-E"
@@ -6134,6 +6138,8 @@ SCKA-20014:
     eeClampMode: 3 # Fixes textbox.
   gsHWFixes:
     roundSprite: 2 # Fixes font artifacts.
+    cpuSpriteRenderBW: 2 # Fixes lines in geometry.
+    cpuSpriteRenderLevel: 2 # Needed for above.
 SCKA-20015:
   name: "Time Crisis 3"
   region: "NTSC-K"
@@ -7190,6 +7196,8 @@ SCPS-15033:
     eeClampMode: 3 # Fixes textbox.
   gsHWFixes:
     roundSprite: 2 # Fixes font artifacts.
+    cpuSpriteRenderBW: 2 # Fixes lines in geometry.
+    cpuSpriteRenderLevel: 2 # Needed for above.
 SCPS-15034:
   name: "This is Football 2003"
   region: "NTSC-J"
@@ -7592,9 +7600,15 @@ SCPS-15102:
 SCPS-15103:
   name: "Gunparade Orchestra - Shiro no Shou - Aomori Penguin Densetsu [Limited Edition]"
   region: "NTSC-J"
+  memcardFilters:
+    - "SCPS-15103"
+    - "SCPS-15104"
 SCPS-15104:
   name: "Gunparade Orchestra - Shiro no Shou - Aomori Penguin Densetsu"
   region: "NTSC-J"
+  memcardFilters:
+    - "SCPS-15103"
+    - "SCPS-15104"
 SCPS-15105:
   name: "Tourist Trophy - The Real Riding Simulator"
   region: "NTSC-J"
@@ -7620,15 +7634,39 @@ SCPS-15106:
 SCPS-15107:
   name: "Gunparade Orchestra - Midori no Shou [Limited Edition]"
   region: "NTSC-J"
+  memcardFilters:
+    - "SCPS-15103"
+    - "SCPS-15104"
+    - "SCPS-15107"
+    - "SCPS-15108"
 SCPS-15108:
   name: "Gunparade Orchestra - Midori no Shou"
   region: "NTSC-J"
+  memcardFilters:
+    - "SCPS-15103"
+    - "SCPS-15104"
+    - "SCPS-15107"
+    - "SCPS-15108"
 SCPS-15109:
   name: "Gunparade Orchestra - Ao no Shou [Limited Edition]"
   region: "NTSC-J"
+  memcardFilters:
+    - "SCPS-15103"
+    - "SCPS-15104"
+    - "SCPS-15107"
+    - "SCPS-15108"
+    - "SCPS-15109"
+    - "SCPS-15110"
 SCPS-15110:
   name: "Gunparade Orchestra - Ao no Shou"
   region: "NTSC-J"
+  memcardFilters:
+    - "SCPS-15103"
+    - "SCPS-15104"
+    - "SCPS-15107"
+    - "SCPS-15108"
+    - "SCPS-15109"
+    - "SCPS-15110"
 SCPS-15111:
   name: "Brave Story - Wataru no Bouken"
   region: "NTSC-J"
@@ -7861,6 +7899,8 @@ SCPS-19215:
     eeClampMode: 3 # Fixes textbox.
   gsHWFixes:
     roundSprite: 2 # Fixes font artifacts.
+    cpuSpriteRenderBW: 2 # Fixes lines in geometry.
+    cpuSpriteRenderLevel: 2 # Needed for above.
 SCPS-19251:
   name: "Wild ARMs - Alter Code F [PlayStation 2 The Best]"
   region: "NTSC-J"
@@ -7949,6 +7989,8 @@ SCPS-19306:
     eeClampMode: 3 # Fixes textbox.
   gsHWFixes:
     roundSprite: 2 # Fixes font artifacts.
+    cpuSpriteRenderBW: 2 # Fixes lines in geometry.
+    cpuSpriteRenderLevel: 2 # Needed for above.
 SCPS-19307:
   name: "Popolocrois - The First Adventure [PlayStation 2 The Best]"
   region: "NTSC-J"
@@ -8438,6 +8480,8 @@ SCPS-55048:
     eeClampMode: 3 # Fixes textbox.
   gsHWFixes:
     roundSprite: 2 # Fixes font artifacts.
+    cpuSpriteRenderBW: 2 # Fixes lines in geometry.
+    cpuSpriteRenderLevel: 2 # Needed for above.
 SCPS-55049:
   name: "King of Fighters 2000, The"
   region: "NTSC-J"
@@ -9085,6 +9129,8 @@ SCUS-97213:
     eeClampMode: 3 # Fixes textbox.
   gsHWFixes:
     roundSprite: 2 # Fixes font artifacts.
+    cpuSpriteRenderBW: 2 # Fixes lines in geometry.
+    cpuSpriteRenderLevel: 2 # Needed for above.
 SCUS-97214:
   name: "NCAA GameBreaker 2003"
   region: "NTSC-U"
@@ -9143,6 +9189,8 @@ SCUS-97229:
     eeClampMode: 3 # Fixes textbox.
   gsHWFixes:
     roundSprite: 2 # Fixes font artifacts.
+    cpuSpriteRenderBW: 2 # Fixes lines in geometry.
+    cpuSpriteRenderLevel: 2 # Needed for above.
 SCUS-97230:
   name: "SOCOM - U.S. Navy SEALs"
   region: "NTSC-U"
@@ -10955,8 +11003,6 @@ SLAJ-35001:
 SLAJ-35003:
   name: "Sakura Taisen - Atsuki Chishio Ni"
   region: "NTSC-C"
-  gsHWFixes:
-    getSkipCount: "GSC_SakuraTaisen"
 SLAJ-35007:
   name: "Zhen San Guo Wu Shuang 5 Special"
   region: "NTSC-C"
@@ -11450,11 +11496,10 @@ SLED-53731:
   name: "Battlefield 2 - Modern Combat [Demo]"
   region: "PAL-E"
   gsHWFixes:
-    autoFlush: 2 # Post-processing.
+    minimumBlendingLevel: 4 # Fixes ground texture rendering.
+    autoFlush: 1 # Post-processing.
     halfPixelOffset: 2 # Offset post-processing.
-    texturePreloading: 1 # Spikes all over the place otherwise.
-    textureInsideRT: 1 # Fixes light shinging through objects.
-    cpuCLUTRender: 1 # Fixes light shining through objects.
+    texturePreloading: 1 # Improves performance.
     getSkipCount: "GSC_Battlefield2" # Depth clear.
     beforeDraw: "OI_Battlefield2" # Framebuffer copy, fixes rendering for bottom part of screen.
 SLED-53732:
@@ -19430,6 +19475,10 @@ SLES-53297:
 SLES-53299:
   name: "Delta Force - Black Hawk Down"
   region: "PAL-M5"
+  gsHWFixes:
+    autoFlush: 1 # Fixes bloom misalignment.
+    halfPixelOffset: 2 # Fixes bloom misalignment.
+    textureInsideRT: 1 # Fixes sky bloom.
 SLES-53300:
   name: "SOCOM 3 - U.S. Navy SEALs"
   region: "PAL-Unk"
@@ -20831,22 +20880,20 @@ SLES-53729:
   name: "Battlefield 2 - Modern Combat"
   region: "PAL-M4"
   gsHWFixes:
-    autoFlush: 2 # Post-processing.
+    minimumBlendingLevel: 4 # Fixes ground texture rendering.
+    autoFlush: 1 # Post-processing.
     halfPixelOffset: 2 # Offset post-processing.
-    texturePreloading: 1 # Spikes all over the place otherwise.
-    textureInsideRT: 1 # Fixes light shinging through objects.
-    cpuCLUTRender: 1 # Fixes light shining through objects.
+    texturePreloading: 1 # Improves performance.
     getSkipCount: "GSC_Battlefield2" # Depth clear.
     beforeDraw: "OI_Battlefield2" # Framebuffer copy, fixes rendering for bottom part of screen.
 SLES-53730:
   name: "Battlefield 2 - Modern Combat"
   region: "PAL-M3"
   gsHWFixes:
-    autoFlush: 2 # Post-processing.
+    minimumBlendingLevel: 4 # Fixes ground texture rendering.
+    autoFlush: 1 # Post-processing.
     halfPixelOffset: 2 # Offset post-processing.
-    texturePreloading: 1 # Spikes all over the place otherwise.
-    textureInsideRT: 1 # Fixes light shinging through objects.
-    cpuCLUTRender: 1 # Fixes light shining through objects.
+    texturePreloading: 1 # Improves performance.
     getSkipCount: "GSC_Battlefield2" # Depth clear.
     beforeDraw: "OI_Battlefield2" # Framebuffer copy, fixes rendering for bottom part of screen.
 SLES-53734:
@@ -27945,8 +27992,6 @@ SLKA-35003:
   name: "Sakura Taisen - Atsuki Chishioni"
   region: "NTSC-K"
   compat: 5
-  gsHWFixes:
-    getSkipCount: "GSC_SakuraTaisen"
 SLKA-35004:
   name: "Sakura Wars 5 So Long My Love"
   region: "NTSC-K"
@@ -28070,6 +28115,16 @@ SLPM-55032:
 SLPM-55033:
   name: "J. League Winning Eleven 2008 - Club Championship"
   region: "NTSC-J"
+SLPM-55034:
+  name: "Battlefield 2 - Modern Combat [EASY 1980]"
+  region: "NTSC-J"
+  gsHWFixes:
+    minimumBlendingLevel: 4 # Fixes ground texture rendering.
+    autoFlush: 1 # Post-processing.
+    halfPixelOffset: 2 # Offset post-processing.
+    texturePreloading: 1 # Improves performance.
+    getSkipCount: "GSC_Battlefield2" # Depth clear.
+    beforeDraw: "OI_Battlefield2" # Framebuffer copy, fixes rendering for bottom part of screen.
 SLPM-55035:
   name: "Fight Night Round 2"
   region: "NTSC-J"
@@ -28138,13 +28193,18 @@ SLPM-55055:
   name: "Kanuchi - Shiroki Tsubasa no Shou"
   region: "NTSC-J"
 SLPM-55056:
-  name: "Wrestle Angels Survivor 2"
+  name: "Wrestle Angels Survivor 2 [Limited Edition]"
   region: "NTSC-J"
   speedHacks:
     eeCycleRate: -2 # Fixes FMV playback.
 SLPM-55057:
   name: "Hakushaku to Yousei - Yume to Kizuna ni Omoi o Hasete"
   region: "NTSC-J"
+SLPM-55058:
+  name: "Wrestle Angels Survivor 2"
+  region: "NTSC-J"
+  speedHacks:
+    eeCycleRate: -2 # Fixes FMV playback.
 SLPM-55059:
   name: "Kanuchi - Shiroki Tsubasa no Shou"
   region: "NTSC-J"
@@ -29781,7 +29841,7 @@ SLPM-61147:
   region: "NTSC-J"
   gsHWFixes:
     autoFlush: 2 # Fixes shadows in cutscenes.
-    halfPixelOffset: 1 # Fixes lighting misalignment and reduces ground shadows (probably texture cache issue).
+    halfPixelOffset: 2 # Fixes lighting misalignment and reduces ground shadows (probably texture cache issue).
     roundSprite: 2 # Fixes font artifacts.
     textureInsideRT: 1 # Fixes bad crystal surfaces.
 SLPM-61148:
@@ -30274,6 +30334,9 @@ SLPM-62143:
 SLPM-62144:
   name: "Super Bust-A-Move"
   region: "NTSC-J"
+SLPM-62145:
+  name: "Teitoku no Ketsudan IV"
+  region: "NTSC-J"
 SLPM-62146:
   name: "Chou Kousoku Mahjong Plus"
   region: "NTSC-J"
@@ -30493,7 +30556,7 @@ SLPM-62220:
   name: "Pachi-Slot Kanzen Kouryaku - Gigazone - The Meteor Strike"
   region: "NTSC-J"
 SLPM-62221:
-  name: "Winning Post 5 - Max 2002"
+  name: "Winning Post 5 Maximum 2002"
   region: "NTSC-J"
   gsHWFixes:
     mipmap: 1 # Improves ground textures to match sw renderer.
@@ -30861,7 +30924,7 @@ SLPM-62338:
   name: "Ishikura Noboru no Igo Kouza"
   region: "NTSC-J"
 SLPM-62339:
-  name: "Kikou Heidan - J-Phoenix 2"
+  name: "Kikou Heidan J-Phoenix 2 - Joshou-hen"
   region: "NTSC-J"
 SLPM-62340:
   name: "Apprentice Magician"
@@ -31286,6 +31349,13 @@ SLPM-62469:
   name: "Gunbird 1&2"
   region: "NTSC-J"
   compat: 5
+SLPM-62470:
+  name: "Teitoku no Ketsudan IV with Power Up Kit"
+  region: "NTSC-J"
+  memcardFilters:
+    - "SLPM-62145"
+    - "SLPM-62470"
+    - "SLPM-62518"
 SLPM-62471:
   name: "Uno [SuperLite 2000 Series]"
   region: "NTSC-J"
@@ -31459,7 +31529,7 @@ SLPM-62517:
   name: "Winning Post 5 [Koei The Best]"
   region: "NTSC-J"
 SLPM-62518:
-  name: "Teitoku no Ketsudan 4 [Koei the Best]"
+  name: "Teitoku no Ketsudan IV [Koei the Best]"
   region: "NTSC-J"
 SLPM-62519:
   name: "Sangokushi VIII [Koei The Best]"
@@ -32544,8 +32614,12 @@ SLPM-65032:
   region: "NTSC-J"
   compat: 5
 SLPM-65033:
-  name: "Kikou Heiden - J-Phoenix"
+  name: "Kikou Heidan J-Phoenix"
   region: "NTSC-J"
+  memcardFilters:
+    - "SLPS-20075"
+    - "SLPM-65033"
+    - "SLPM-65117"
 SLPM-65034:
   name: "Sangokushi North Winds"
   region: "NTSC-J"
@@ -32741,6 +32815,8 @@ SLPM-65080:
   name: "Tokimeki Memorial 3"
   region: "NTSC-J"
   compat: 5
+  gsHWFixes:
+    textureInsideRT: 1 # Fixes character portraits.
 SLPM-65081:
   name: "Grandia II"
   region: "NTSC-J"
@@ -32853,8 +32929,12 @@ SLPM-65116:
   name: "Lilie no Atelier Plus - Salburg no Renkinjutsushi 3"
   region: "NTSC-J"
 SLPM-65117:
-  name: "Kikou Heiden J-Phoenix [Takara The Best]"
+  name: "Kikou Heidan J-Phoenix [Takara The Best]"
   region: "NTSC-J"
+  memcardFilters:
+    - "SLPS-20075"
+    - "SLPM-65033"
+    - "SLPM-65117"
 SLPM-65118:
   name: "Tokimeki Memorial 2 - Video Clips"
   region: "NTSC-J"
@@ -32869,11 +32949,23 @@ SLPM-65121:
   region: "NTSC-J"
   compat: 5
 SLPM-65122:
-  name: "J-Phoenix Burst Tactics [Limited Edition]"
+  name: "Kikou Heidan J-Phoenix Burst Tactics [Limited Edition]"
   region: "NTSC-J"
+  memcardFilters:
+    - "SLPS-20075"
+    - "SLPM-65033"
+    - "SLPM-65117"
+    - "SLPM-65122"
+    - "SLPM-65123"
 SLPM-65123:
-  name: "J-Phoenix Burst Tactics"
+  name: "Kikou Heidan J-Phoenix Burst Tactics"
   region: "NTSC-J"
+  memcardFilters:
+    - "SLPS-20075"
+    - "SLPM-65033"
+    - "SLPM-65117"
+    - "SLPM-65122"
+    - "SLPM-65123"
 SLPM-65124:
   name: "Auto Modellista"
   region: "NTSC-J"
@@ -33098,8 +33190,15 @@ SLPM-65198:
   name: "Shaun Palmer's Pro Snowboarder"
   region: "NTSC-J"
 SLPM-65199:
-  name: "J-Phoenix - Cobalt Shoutaihen"
+  name: "Kikou Heidan J-Phoenix Cobalt Shoutai-hen"
   region: "NTSC-J"
+  memcardFilters:
+    - "SLPS-20075"
+    - "SLPM-65033"
+    - "SLPM-65117"
+    - "SLPM-65122"
+    - "SLPM-65123"
+    - "SLPM-65199"
 SLPM-65200:
   name: "Shinobi"
   region: "NTSC-J"
@@ -33527,7 +33626,7 @@ SLPM-65297:
   name: "F - Fanatic"
   region: "NTSC-J"
 SLPM-65298:
-  name: "Winning Post 5 - Maximum 2003"
+  name: "Winning Post 5 Maximum 2003"
   region: "NTSC-J"
 SLPM-65299:
   name: "Konohana 3"
@@ -33693,8 +33792,11 @@ SLPM-65342:
   name: "Kyoufu Shinbun (Heisei) Kaiki! Shinrei File"
   region: "NTSC-J"
 SLPM-65343:
-  name: "Kikou Heidan - J-Phoenix 2"
+  name: "Kikou Heidan J-Phoenix 2"
   region: "NTSC-J"
+  memcardFilters:
+    - "SLPM-62339"
+    - "SLPM-65343"
 SLPM-65344:
   name: "Project Minerva - Professional"
   region: "NTSC-J"
@@ -35658,7 +35760,7 @@ SLPM-65892:
   name: "Zill O'll Infinite"
   region: "NTSC-J"
 SLPM-65894:
-  name: "Winning Post 6 - 2005 Version"
+  name: "Winning Post 6 2005 Version"
   region: "NTSC-J"
 SLPM-65895:
   name: "Tsuki wa Kirisaku [Limited Edition]"
@@ -36911,11 +37013,10 @@ SLPM-66206:
   name: "Battlefield 2 - Modern Combat"
   region: "NTSC-J"
   gsHWFixes:
-    autoFlush: 2 # Post-processing.
+    minimumBlendingLevel: 4 # Fixes ground texture rendering.
+    autoFlush: 1 # Post-processing.
     halfPixelOffset: 2 # Offset post-processing.
-    texturePreloading: 1 # Spikes all over the place otherwise.
-    textureInsideRT: 1 # Fixes light shinging through objects.
-    cpuCLUTRender: 1 # Fixes light shining through objects.
+    texturePreloading: 1 # Improves performance.
     getSkipCount: "GSC_Battlefield2" # Depth clear.
     beforeDraw: "OI_Battlefield2" # Framebuffer copy, fixes rendering for bottom part of screen.
 SLPM-66207:
@@ -37078,7 +37179,7 @@ SLPM-66238:
   name: "Otometeki Koi Kakumei Rabu Rebo!!"
   region: "NTSC-J"
 SLPM-66239:
-  name: "Wrestle Angels - Survivor"
+  name: "Wrestle Angels Survivor"
   region: "NTSC-J"
 SLPM-66240:
   name: "Jissen Pachi-Slot Hisshouhou! Aladdin 2 Evolution"
@@ -38741,11 +38842,10 @@ SLPM-66651:
   name: "Battlefield 2 - Modern Combat [EA Best Hits]"
   region: "NTSC-J"
   gsHWFixes:
-    autoFlush: 2 # Post-processing.
+    minimumBlendingLevel: 4 # Fixes ground texture rendering.
+    autoFlush: 1 # Post-processing.
     halfPixelOffset: 2 # Offset post-processing.
-    texturePreloading: 1 # Spikes all over the place otherwise.
-    textureInsideRT: 1 # Fixes light shinging through objects.
-    cpuCLUTRender: 1 # Fixes light shining through objects.
+    texturePreloading: 1 # Improves performance.
     getSkipCount: "GSC_Battlefield2" # Depth clear.
     beforeDraw: "OI_Battlefield2" # Framebuffer copy, fixes rendering for bottom part of screen.
 SLPM-66652:
@@ -38992,7 +39092,7 @@ SLPM-66701:
   name: "Sangokushi XI [with Power-Up Kit]"
   region: "NTSC-J"
 SLPM-66702:
-  name: "Winning Post 7 - Maximum 2007"
+  name: "Winning Post 7 Maximum 2007"
   region: "NTSC-J"
 SLPM-66703:
   name: "Racing Game - Chuui!!!! [Konami the Best]"
@@ -39734,10 +39834,10 @@ SLPM-66902:
   name: "Disney Princess - Enchanted Journey"
   region: "NTSC-J"
 SLPM-66903:
-  name: "GI Jockey 4 - 2007 [with Winning Post 7 - 2007 - Premium Pack]"
+  name: "GI Jockey 4 - 2007 [with Winning Post 7 Maximum 2007 - Premium Pack]"
   region: "NTSC-J"
 SLPM-66904:
-  name: "Winning Post 7 - 2007 [with GI Jockey 4 - 2007 - Premium Pack]"
+  name: "Winning Post 7 Maximum 2007 [with GI Jockey 4 - 2007 - Premium Pack]"
   region: "NTSC-J"
 SLPM-66905:
   name: "D.C. Da Capo The Origin"
@@ -39817,7 +39917,7 @@ SLPM-66926:
   region: "NTSC-J"
   compat: 5
 SLPM-66927:
-  name: "Wrestle Angels - Survivor [Good Price]"
+  name: "Wrestle Angels Survivor [Good Price]"
   region: "NTSC-J"
 SLPM-66928:
   name: "Your Memories Off Girls Style"
@@ -40078,8 +40178,6 @@ SLPM-67003:
   name: "Sakura Taisen - Atsuki Chishioni"
   region: "NTSC-J"
   compat: 5
-  gsHWFixes:
-    getSkipCount: "GSC_SakuraTaisen"
 SLPM-67004:
   name: "Medal of Honor - Rising Sun"
   region: "NTSC-J"
@@ -44313,6 +44411,8 @@ SLPS-25450:
   name: "Tales of Rebirth"
   region: "NTSC-J"
   compat: 5
+  speedHacks:
+    mvuFlag: 0 # Fixes graphical corruptions.
 SLPS-25451:
   name: "Hana to Taiyou to Ame to [Super Best Collection]"
   region: "NTSC-J"
@@ -45008,7 +45108,7 @@ SLPS-25640:
   compat: 5
   gsHWFixes:
     autoFlush: 2 # Fixes shadows in cutscenes.
-    halfPixelOffset: 1 # Fixes lighting misalignment and reduces ground shadows (probably texture cache issue).
+    halfPixelOffset: 2 # Fixes lighting misalignment and reduces ground shadows (probably texture cache issue).
     roundSprite: 2 # Fixes font artifacts.
     textureInsideRT: 1 # Fixes bad crystal surfaces.
   memcardFilters: # Allows import of Xenosaga II save data.
@@ -45020,7 +45120,7 @@ SLPS-25641:
   compat: 5
   gsHWFixes:
     autoFlush: 2 # Fixes shadows in cutscenes.
-    halfPixelOffset: 1 # Fixes lighting misalignment and reduces ground shadows (probably texture cache issue).
+    halfPixelOffset: 2 # Fixes lighting misalignment and reduces ground shadows (probably texture cache issue).
     roundSprite: 2 # Fixes font artifacts.
     textureInsideRT: 1 # Fixes bad crystal surfaces.
   memcardFilters:
@@ -51931,11 +52031,10 @@ SLUS-21026:
   region: "NTSC-U"
   compat: 5
   gsHWFixes:
-    autoFlush: 2 # Post-processing.
+    minimumBlendingLevel: 4 # Fixes ground texture rendering.
+    autoFlush: 1 # Post-processing.
     halfPixelOffset: 2 # Offset post-processing.
-    texturePreloading: 1 # Spikes all over the place otherwise.
-    textureInsideRT: 1 # Fixes light shinging through objects.
-    cpuCLUTRender: 1 # Fixes light shining through objects.
+    texturePreloading: 1 # Improves performance.
     getSkipCount: "GSC_Battlefield2" # Depth clear.
     beforeDraw: "OI_Battlefield2" # Framebuffer copy, fixes rendering for bottom part of screen.
 SLUS-21027:
@@ -52450,6 +52549,10 @@ SLUS-21124:
   name: "Delta Force - Black Hawk Down"
   region: "NTSC-U"
   compat: 5
+  gsHWFixes:
+    autoFlush: 1 # Fixes bloom misalignment.
+    halfPixelOffset: 2 # Fixes bloom misalignment.
+    textureInsideRT: 1 # Fixes sky bloom.
 SLUS-21125:
   name: "Airborne Troops - Countdown to D-Day"
   region: "NTSC-U"
@@ -53922,6 +54025,9 @@ SLUS-21366:
 SLUS-21367:
   name: "MVP '06 - NCAA Baseball"
   region: "NTSC-U"
+  gsHWFixes:
+    cpuSpriteRenderBW: 2 # Fixes broken replay window graphics.
+    cpuSpriteRenderLevel: 2 # Needed for above.
 SLUS-21368:
   name: "Rugby '06"
   region: "NTSC-U"
@@ -54073,7 +54179,7 @@ SLUS-21389:
   compat: 5
   gsHWFixes:
     autoFlush: 2
-    halfPixelOffset: 1 # Fixes lighting misalignment and reduces ground shadows.
+    halfPixelOffset: 2 # Fixes lighting misalignment and reduces ground shadows.
     roundSprite: 2 # Fixes font artifacts.
     textureInsideRT: 1 # Fixes bad crystal surfaces.
   memcardFilters: # Allows import of Xenosaga II save data.
@@ -54225,7 +54331,7 @@ SLUS-21417:
   compat: 5
   gsHWFixes:
     autoFlush: 2
-    halfPixelOffset: 1 # Fixes lighting misalignment and reduces ground shadows.
+    halfPixelOffset: 2 # Fixes lighting misalignment and reduces ground shadows.
     roundSprite: 2 # Fixes font artifacts.
     textureInsideRT: 1 # Fixes bad crystal surfaces.
   memcardFilters:
@@ -54954,6 +55060,9 @@ SLUS-21581:
 SLUS-21582:
   name: "MVP '07 - NCAA Baseball"
   region: "NTSC-U"
+  gsHWFixes:
+    cpuSpriteRenderBW: 2 # Fixes broken replay window graphics.
+    cpuSpriteRenderLevel: 2 # Needed for above.
 SLUS-21583:
   name: "Crash of the Titans"
   region: "NTSC-U"
@@ -57309,11 +57418,10 @@ SLUS-29117:
   name: "Battlefield 2 - Modern Combat [Public Beta Vol.1.0]"
   region: "NTSC-U"
   gsHWFixes:
-    autoFlush: 2 # Post-processing.
+    minimumBlendingLevel: 4 # Fixes ground texture rendering.
+    autoFlush: 1 # Post-processing.
     halfPixelOffset: 2 # Offset post-processing.
-    texturePreloading: 1 # Spikes all over the place otherwise.
-    textureInsideRT: 1 # Fixes light shinging through objects.
-    cpuCLUTRender: 1 # Fixes light shining through objects.
+    texturePreloading: 1 # Improves performance.
     getSkipCount: "GSC_Battlefield2" # Depth clear.
     beforeDraw: "OI_Battlefield2" # Framebuffer copy, fixes rendering for bottom part of screen.
 SLUS-29118:
@@ -57438,11 +57546,10 @@ SLUS-29152:
   name: "Battlefield 2 - Modern Combat [Regular Demo]"
   region: "NTSC-U"
   gsHWFixes:
-    autoFlush: 2 # Post-processing.
+    minimumBlendingLevel: 4 # Fixes ground texture rendering.
+    autoFlush: 1 # Post-processing.
     halfPixelOffset: 2 # Offset post-processing.
-    texturePreloading: 1 # Spikes all over the place otherwise.
-    textureInsideRT: 1 # Fixes light shinging through objects.
-    cpuCLUTRender: 1 # Fixes light shining through objects.
+    texturePreloading: 1 # Improves performance.
     getSkipCount: "GSC_Battlefield2" # Depth clear.
     beforeDraw: "OI_Battlefield2" # Framebuffer copy, fixes rendering for bottom part of screen.
 SLUS-29153:
@@ -57536,11 +57643,10 @@ SLUS-29172:
   name: "Battlefield 2 - Modern Combat [Demo]"
   region: "NTSC-U"
   gsHWFixes:
-    autoFlush: 2 # Post-processing.
+    minimumBlendingLevel: 4 # Fixes ground texture rendering.
+    autoFlush: 1 # Post-processing.
     halfPixelOffset: 2 # Offset post-processing.
-    texturePreloading: 1 # Spikes all over the place otherwise.
-    textureInsideRT: 1 # Fixes light shinging through objects.
-    cpuCLUTRender: 1 # Fixes light shining through objects.
+    texturePreloading: 1 # Improves performance.
     getSkipCount: "GSC_Battlefield2" # Depth clear.
     beforeDraw: "OI_Battlefield2" # Framebuffer copy, fixes rendering for bottom part of screen.
 SLUS-29173:

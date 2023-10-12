@@ -21,6 +21,7 @@
 #include "CDVD/CDVD.h"
 #include "Elfheader.h"
 #include "Host.h"
+#include "GS/Renderers/Common/GSTexture.h"
 #include "ImGui/FullscreenUI.h"
 #include "ImGui/ImGuiFullscreen.h"
 #include "ImGui/ImGuiManager.h"
@@ -1013,7 +1014,7 @@ void Achievements::DisplayAchievementSummary()
 		std::string summary;
 		if (s_game_summary.num_core_achievements > 0)
 		{
-			summary = fmt::format(TRANSLATE_FS("Achievements", "You have earned {} of {} achievements, and {} of {} points."),
+			summary = fmt::format(TRANSLATE_FS("Achievements", "You have unlocked {0} of {1} achievements, and earned {2} of {3} points."),
 				s_game_summary.num_unlocked_achievements, s_game_summary.num_core_achievements, s_game_summary.points_unlocked,
 				s_game_summary.points_core);
 		}
@@ -1096,7 +1097,7 @@ void Achievements::HandleGameCompleteEvent(const rc_client_event_t* event)
 	if (EmuConfig.Achievements.Notifications)
 	{
 		std::string title = fmt::format(TRANSLATE_FS("Achievements", "Mastered {}"), s_game_title);
-		std::string message = fmt::format(TRANSLATE_FS("Achievements", "{} achievements, {} points"),
+		std::string message = fmt::format(TRANSLATE_FS("Achievements", "{0} achievements, {1} points"),
 			s_game_summary.num_unlocked_achievements, s_game_summary.points_unlocked);
 
 		MTGS::RunOnGSThread([title = std::move(title), message = std::move(message), icon = s_game_icon]() {
@@ -1187,13 +1188,13 @@ void Achievements::HandleLeaderboardScoreboardEvent(const rc_client_event_t* eve
 	if (EmuConfig.Achievements.LeaderboardNotifications)
 	{
 		static const char* value_strings[NUM_RC_CLIENT_LEADERBOARD_FORMATS] = {
-			TRANSLATE_NOOP("Achievements", "Your Time: {} (Best: {})"),
-			TRANSLATE_NOOP("Achievements", "Your Score: {} (Best: {})"),
-			TRANSLATE_NOOP("Achievements", "Your Value: {} (Best: {})"),
+			TRANSLATE_NOOP("Achievements", "Your Time: {0} (Best: {1})"),
+			TRANSLATE_NOOP("Achievements", "Your Score: {0} (Best: {1})"),
+			TRANSLATE_NOOP("Achievements", "Your Value: {0} (Best: {1})"),
 		};
 
 		std::string title = event->leaderboard->title;
-		std::string message = fmt::format(TRANSLATE_FS("Achievements", "{}\nLeaderboard Position: {} of {}"),
+		std::string message = fmt::format(TRANSLATE_FS("Achievements", "{0}\nLeaderboard Position: {1} of {2}"),
 			fmt::format(fmt::runtime(Host::TranslateToStringView("Achievements",
 							value_strings[std::min<u8>(event->leaderboard->format, NUM_RC_CLIENT_LEADERBOARD_FORMATS - 1)])),
 				event->leaderboard_scoreboard->submitted_score, event->leaderboard_scoreboard->best_score),
@@ -1325,7 +1326,7 @@ void Achievements::HandleAchievementProgressIndicatorUpdateEvent(const rc_client
 
 void Achievements::HandleServerErrorEvent(const rc_client_event_t* event)
 {
-	std::string message = fmt::format(TRANSLATE_FS("Achievements", "Server error in {}:\n{}"),
+	std::string message = fmt::format(TRANSLATE_FS("Achievements", "Server error in {0}:\n{1}"),
 		event->server_error->api ? event->server_error->api : "UNKNOWN",
 		event->server_error->error_message ? event->server_error->error_message : "UNKNOWN");
 	Console.Error("(Achievements) %s", message.c_str());
@@ -1754,7 +1755,7 @@ void Achievements::ShowLoginSuccess(const rc_client_t* client)
 
 		//: Summary for login notification.
 		std::string title = user->display_name;
-		std::string summary = fmt::format(TRANSLATE_FS("Achievements", "Score: {} ({} softcore)\nUnread messages: {}"), user->score,
+		std::string summary = fmt::format(TRANSLATE_FS("Achievements", "Score: {0} ({1} softcore)\nUnread messages: {2}"), user->score,
 			user->score_softcore, user->num_unread_messages);
 
 		MTGS::RunOnGSThread([title = std::move(title), summary = std::move(summary), badge_path = std::move(badge_path)]() {
@@ -1881,7 +1882,7 @@ void Achievements::DrawGameOverlays()
 			GSTexture* badge = ImGuiFullscreen::GetCachedTextureAsync(indicator.badge_path.c_str());
 			if (badge)
 			{
-				dl->AddImage(badge, current_position, current_position + image_size, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), col);
+				dl->AddImage(badge->GetNativeHandle(), current_position, current_position + image_size, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), col);
 				current_position.x -= x_advance;
 			}
 
@@ -1921,7 +1922,7 @@ void Achievements::DrawGameOverlays()
 		if (badge)
 		{
 			const ImVec2 badge_pos = box_min + ImVec2(padding, padding);
-			dl->AddImage(badge, badge_pos, badge_pos + image_size, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), col);
+			dl->AddImage(badge->GetNativeHandle(), badge_pos, badge_pos + image_size, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), col);
 		}
 
 		const ImVec2 text_pos = box_min + ImVec2(padding + image_size.x + spacing, (box_max.y - box_min.y - text_size.y) * 0.5f);
@@ -2019,7 +2020,7 @@ void Achievements::DrawPauseMenuOverlays()
 			if (!badge)
 				continue;
 
-			dl->AddImage(badge, position, position + image_size);
+			dl->AddImage(badge->GetNativeHandle(), position, position + image_size);
 
 			const char* achievement_title = indicator.achievement->title;
 			const char* achievement_title_end = achievement_title + std::strlen(indicator.achievement->title);
@@ -2110,7 +2111,7 @@ void Achievements::DrawAchievementsWindow()
 				if (badge)
 				{
 					ImGui::GetWindowDrawList()->AddImage(
-						badge, icon_min, icon_max, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), IM_COL32(255, 255, 255, 255));
+						badge->GetNativeHandle(), icon_min, icon_max, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), IM_COL32(255, 255, 255, 255));
 				}
 			}
 
@@ -2147,7 +2148,7 @@ void Achievements::DrawAchievementsWindow()
 			}
 			else
 			{
-				text.fmt(TRANSLATE_FS("Achievements", "You have unlocked {} of {} achievements, earning {} of {} possible points."),
+				text.fmt(TRANSLATE_FS("Achievements", "You have unlocked {0} of {1} achievements, earning {2} of {3} possible points."),
 					s_game_summary.num_unlocked_achievements, s_game_summary.num_core_achievements, s_game_summary.points_unlocked,
 					s_game_summary.points_core);
 			}
@@ -2273,7 +2274,7 @@ void Achievements::DrawAchievement(const rc_client_achievement_t* cheevo)
 		if (badge)
 		{
 			ImGui::GetWindowDrawList()->AddImage(
-				badge, bb.Min, bb.Min + image_size, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), IM_COL32(255, 255, 255, 255));
+				badge->GetNativeHandle(), bb.Min, bb.Min + image_size, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), IM_COL32(255, 255, 255, 255));
 		}
 	}
 
@@ -2421,7 +2422,7 @@ void Achievements::DrawLeaderboardsWindow()
 				if (badge)
 				{
 					ImGui::GetWindowDrawList()->AddImage(
-						badge, icon_min, icon_max, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), IM_COL32(255, 255, 255, 255));
+						badge->GetNativeHandle(), icon_min, icon_max, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), IM_COL32(255, 255, 255, 255));
 				}
 			}
 
@@ -2712,7 +2713,7 @@ void Achievements::DrawLeaderboardEntry(const rc_client_leaderboard_entry_t& ent
 	if (icon_tex)
 	{
 		ImGui::GetWindowDrawList()->AddImage(
-			reinterpret_cast<ImTextureID>(icon_tex), icon_bb.Min, icon_bb.Min + ImVec2(icon_size, icon_size));
+			icon_tex->GetNativeHandle(), icon_bb.Min, icon_bb.Min + ImVec2(icon_size, icon_size));
 	}
 
 	const ImRect user_bb(ImVec2(text_start_x + column_spacing + icon_size, bb.Min.y), ImVec2(bb.Max.x, midpoint));

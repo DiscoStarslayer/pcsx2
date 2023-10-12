@@ -1917,7 +1917,7 @@ void GSRendererHW::Draw()
 	if (GSConfig.UserHacks_CPUCLUTRender > 0 || GSConfig.UserHacks_GPUTargetCLUTMode != GSGPUTargetCLUTMode::Disabled)
 	{
 		const CLUTDrawTestResult result = (GSConfig.UserHacks_CPUCLUTRender == 2) ? PossibleCLUTDrawAggressive() : PossibleCLUTDraw();
-		m_mem.m_clut.ClearDrawInvalidity(false);
+		m_mem.m_clut.ClearDrawInvalidity();
 		if (result == CLUTDrawTestResult::CLUTDrawOnCPU && GSConfig.UserHacks_CPUCLUTRender > 0)
 		{
 			if (SwPrimRender(*this, true, true))
@@ -2214,7 +2214,8 @@ void GSRendererHW::Draw()
 			tgt = nullptr;
 		}
 		const bool possible_shuffle = ((rt_32bit && GSLocalMemory::m_psm[m_cached_ctx.FRAME.PSM].bpp == 16) || m_cached_ctx.FRAME.Block() == m_cached_ctx.TEX0.TBP0) || IsPossibleChannelShuffle();
-		const bool req_color = (!PRIM->ABE || (PRIM->ABE && m_context->ALPHA.IsUsingCs())) && (possible_shuffle || (m_cached_ctx.FRAME.FBMSK & (fm_mask & 0x00FFFFFF)) != (fm_mask & 0x00FFFFFF));
+		const bool need_aem_color = GSLocalMemory::m_psm[m_cached_ctx.TEX0.PSM].trbpp <= 24 && GSLocalMemory::m_psm[m_cached_ctx.TEX0.PSM].pal == 0 && m_context->ALPHA.C == 0 && m_env.TEXA.AEM;
+		const bool req_color = (!PRIM->ABE || (PRIM->ABE && (m_context->ALPHA.IsUsingCs() || need_aem_color))) && (possible_shuffle || (m_cached_ctx.FRAME.FBMSK & (fm_mask & 0x00FFFFFF)) != (fm_mask & 0x00FFFFFF));
 		const bool req_alpha = (GSUtil::GetChannelMask(m_context->TEX0.PSM) & 0x8) && m_context->TEX0.TCC && ((m_cached_ctx.TEST.ATE && m_cached_ctx.TEST.ATST > ATST_ALWAYS) || (possible_shuffle || (m_cached_ctx.FRAME.FBMSK & (fm_mask & 0xFF000000)) != (fm_mask & 0xFF000000)));
 
 		src = tex_psm.depth ? g_texture_cache->LookupDepthSource(TEX0, env.TEXA, MIP_CLAMP, tmm.coverage, possible_shuffle, m_vt.IsLinear(), m_cached_ctx.FRAME.Block(), req_color, req_alpha) :
@@ -4209,10 +4210,10 @@ __ri void GSRendererHW::EmulateTextureSampler(const GSTextureCache::Target* rt, 
 	m_conf.ps.wms = (wms & 2 || target_region) ? wms : 0;
 	m_conf.ps.wmt = (wmt & 2 || target_region) ? wmt : 0;
 
-	// Depth + bilinear filtering isn't done yet (And I'm not sure we need it anyway but a game will prove me wrong)
-	// So of course, GTA set the linear mode, but sampling is done at texel center so it is equivalent to nearest sampling
+	// Depth + bilinear filtering isn't done yet. But if the game has just set a Z24 swizzle on a colour texture, we can
+	// just pretend it's not a depth format, since in the texture cache, it's not.
 	// Other games worth testing: Area 51, Burnout
-	if (psm.depth && m_vt.IsLinear())
+	if (psm.depth && m_vt.IsLinear() && tex->GetTexture()->IsDepthStencil())
 		GL_INS("WARNING: Depth + bilinear filtering not supported");
 
 	// Performance note:
@@ -4292,18 +4293,10 @@ __ri void GSRendererHW::EmulateTextureSampler(const GSTextureCache::Target* rt, 
 		}
 
 		// Depth format
-		if (tex->m_texture->GetType() == GSTexture::Type::DepthStencil)
+		if (tex->m_texture->IsDepthStencil())
 		{
 			// Require a float conversion if the texure is a depth format
 			m_conf.ps.depth_fmt = (psm.bpp == 16) ? 2 : 1;
-
-			// Don't force interpolation on depth format
-			bilinear &= m_vt.IsLinear();
-		}
-		else if (psm.depth)
-		{
-			// Use Integral scaling
-			m_conf.ps.depth_fmt = 3;
 
 			// Don't force interpolation on depth format
 			bilinear &= m_vt.IsLinear();
@@ -4383,9 +4376,11 @@ __ri void GSRendererHW::EmulateTextureSampler(const GSTextureCache::Target* rt, 
 	m_conf.cb_ps.HalfTexel = GSVector4(-0.5f, 0.5f).xxyy() / WH.zwzw();
 	if (complex_wms_wmt)
 	{
+		// Add 0.5 to the coordinates because the region clamp is inclusive, size is exclusive. We use 0.5 because we want to clamp
+		// to the last texel in the image, not halfway between it and wrapping around.
 		const GSVector4i clamp(m_cached_ctx.CLAMP.MINU, m_cached_ctx.CLAMP.MINV, m_cached_ctx.CLAMP.MAXU, m_cached_ctx.CLAMP.MAXV);
-		const GSVector4 region_repeat(GSVector4::cast(clamp));
-		const GSVector4 region_clamp(GSVector4(clamp) / WH.xyxy());
+		const GSVector4 region_repeat = GSVector4::cast(clamp);
+		const GSVector4 region_clamp = (GSVector4(clamp) + GSVector4::cxpr(0.0f, 0.0f, 0.5f, 0.5f)) / WH.xyxy();
 		if (wms >= CLAMP_REGION_CLAMP)
 		{
 			m_conf.cb_ps.MinMax.x = (wms == CLAMP_REGION_CLAMP && !m_conf.ps.depth_fmt) ? region_clamp.x : region_repeat.x;
@@ -5795,7 +5790,6 @@ bool GSRendererHW::DetectDoubleHalfClear(bool& no_rt, bool& no_ds)
 			else
 				end_block = GSLocalMemory::GetUnwrappedEndBlockAddress(tgt->m_TEX0.TBP0, (m_cached_ctx.FRAME.FBW == (tgt->m_TEX0.TBW / 2)) ? tgt->m_TEX0.TBW : m_cached_ctx.FRAME.FBW, tgt->m_TEX0.PSM, target_rect);
 		}
-		const int ctx = next_ctx;
 
 		if (tgt)
 		{
@@ -5823,12 +5817,16 @@ bool GSRendererHW::DetectDoubleHalfClear(bool& no_rt, bool& no_ds)
 	// Double the clear rect.
 	if (horizontal)
 	{
+		const int width = m_r.width();
 		m_cached_ctx.FRAME.FBW *= 2;
-		m_r.z += m_r.x + m_r.width();
+		m_r.z = (w_pages * frame_psm.pgs.x);
+		m_r.z += m_r.x + width;
 	}
 	else
 	{
-		m_r.w += m_r.y + m_r.height();
+		const int height = m_r.height();
+		m_r.w = ((half - base) / m_cached_ctx.FRAME.FBW) * frame_psm.pgs.y;
+		m_r.w += m_r.y + height;
 	}
 	ReplaceVerticesWithSprite(m_r, GSVector2i(1, 1));
 

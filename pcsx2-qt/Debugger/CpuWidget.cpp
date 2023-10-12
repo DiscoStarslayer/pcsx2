@@ -68,7 +68,10 @@ CpuWidget::CpuWidget(QWidget* parent, DebugInterface& cpu)
 	connect(m_ui.threadList, &QTableView::doubleClicked, this, &CpuWidget::onThreadListDoubleClick);
 
 	m_ui.threadList->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-	m_ui.threadList->setModel(&m_threadModel);
+	m_threadProxyModel.setSourceModel(&m_threadModel);
+	m_ui.threadList->setModel(&m_threadProxyModel);
+	m_ui.threadList->setSortingEnabled(true);
+	m_ui.threadList->sortByColumn(ThreadModel::ThreadColumns::ID, Qt::SortOrder::AscendingOrder);
 
 	connect(m_ui.stackList, &QTableView::customContextMenuRequested, this, &CpuWidget::onStackListContextMenu);
 	connect(m_ui.stackList, &QTableView::doubleClicked, this, &CpuWidget::onStackListDoubleClick);
@@ -279,7 +282,19 @@ void CpuWidget::onBPListContextMenu(QPoint pos)
 		contextMenu->addAction(deleteAction);
 	}
 
-	contextMenu->popup(m_ui.breakpointList->mapToGlobal(pos));
+	contextMenu->addSeparator();
+	QAction* actionExport = new QAction(tr("Copy all as CSV"), m_ui.breakpointList);
+	connect(actionExport, &QAction::triggered, [this]() {
+		// It's important to use the User Role here to allow pasting to be translation agnostic
+		QGuiApplication::clipboard()->setText(QtUtils::AbstractItemModelToCSV(m_ui.breakpointList->model(), Qt::UserRole));
+	});
+	contextMenu->addAction(actionExport);
+
+	QAction* actionImport = new QAction(tr("Paste from CSV"), m_ui.breakpointList);
+	connect(actionImport, &QAction::triggered, this, &CpuWidget::contextBPListPasteCSV);
+	contextMenu->addAction(actionImport);
+
+	contextMenu->popup(m_ui.breakpointList->viewport()->mapToGlobal(pos));
 }
 
 void CpuWidget::contextBPListCopy()
@@ -330,6 +345,109 @@ void CpuWidget::contextBPListEdit()
 
 	BreakpointDialog* bpDialog = new BreakpointDialog(this, &m_cpu, m_bpModel, bpObject, selectedRow);
 	bpDialog->show();
+}
+
+void CpuWidget::contextBPListPasteCSV()
+{
+	QString csv = QGuiApplication::clipboard()->text();
+	// Skip header
+	csv = csv.mid(csv.indexOf('\n') + 1);
+
+	for (const QString& line : csv.split('\n'))
+	{
+		const QStringList fields = line.split(',');
+		if (fields.size() != BreakpointModel::BreakpointColumns::COLUMN_COUNT)
+		{
+			Console.WriteLn("Debugger CSV Import: Invalid number of columns, skipping");
+			continue;
+		}
+
+		bool ok;
+		int type = fields[0].toUInt(&ok);
+		if (!ok)
+		{
+			Console.WriteLn("Debugger CSV Import: Failed to parse type '%s', skipping", fields[0].toUtf8().constData());
+			continue;
+		}
+
+		// This is how we differentiate between breakpoints and memchecks
+		if (type == MEMCHECK_INVALID)
+		{
+			BreakPoint bp;
+
+			// Address
+			bp.addr = fields[1].toUInt(&ok, 16);
+			if (!ok)
+			{
+				Console.WriteLn("Debugger CSV Import: Failed to parse address '%s', skipping", fields[1].toUtf8().constData());
+				continue;
+			}
+
+			// Condition
+			if (fields[4] != "No Condition")
+			{
+				PostfixExpression expr;
+				bp.hasCond = true;
+				bp.cond.debug = &m_cpu;
+
+				if (!m_cpu.initExpression(fields[4].toUtf8().constData(), expr))
+				{
+					Console.WriteLn("Debugger CSV Import: Failed to parse cond '%s', skipping", fields[4].toUtf8().constData());
+					continue;
+				}
+				bp.cond.expression = expr;
+				strncpy(&bp.cond.expressionString[0], fields[4].toUtf8().constData(), sizeof(bp.cond.expressionString));
+			}
+
+			// Enabled
+			bp.enabled = fields[6].toUInt(&ok);
+			if (!ok)
+			{
+				Console.WriteLn("Debugger CSV Import: Failed to parse enable flag '%s', skipping", fields[1].toUtf8().constData());
+				continue;
+			}
+
+			m_bpModel.insertBreakpointRows(0, 1, {bp});
+		}
+		else
+		{
+			MemCheck mc;
+			// Mode
+			if (type >= MEMCHECK_INVALID)
+			{
+				Console.WriteLn("Debugger CSV Import: Failed to parse cond type '%s', skipping", fields[0].toUtf8().constData());
+				continue;
+			}
+			mc.cond = static_cast<MemCheckCondition>(type);
+
+			// Address
+			mc.start = fields[1].toUInt(&ok, 16);
+			if (!ok)
+			{
+				Console.WriteLn("Debugger CSV Import: Failed to parse address '%s', skipping", fields[1].toUtf8().constData());
+				continue;
+			}
+
+			// Size
+			mc.end = fields[2].toUInt(&ok, 16) + mc.start;
+			if (!ok)
+			{
+				Console.WriteLn("Debugger CSV Import: Failed to parse length '%s', skipping", fields[1].toUtf8().constData());
+				continue;
+			}
+
+			// Result
+			int result = fields[6].toUInt(&ok);
+			if (!ok)
+			{
+				Console.WriteLn("Debugger CSV Import: Failed to parse result flag '%s', skipping", fields[1].toUtf8().constData());
+				continue;
+			}
+			mc.result = static_cast<MemCheckResult>(result);
+
+			m_bpModel.insertBreakpointRows(0, 1, {mc});
+		}
+	}
 }
 
 void CpuWidget::updateFunctionList(bool whenEmpty)
@@ -393,7 +511,15 @@ void CpuWidget::onThreadListContextMenu(QPoint pos)
 	});
 	contextMenu->addAction(actionCopy);
 
-	contextMenu->popup(m_ui.threadList->mapToGlobal(pos));
+	contextMenu->addSeparator();
+
+	QAction* actionExport = new QAction(tr("Copy all as CSV"), m_ui.threadList);
+	connect(actionExport, &QAction::triggered, [this]() {
+		QGuiApplication::clipboard()->setText(QtUtils::AbstractItemModelToCSV(m_ui.threadList->model()));
+	});
+	contextMenu->addAction(actionExport);
+
+	contextMenu->popup(m_ui.threadList->viewport()->mapToGlobal(pos));
 }
 
 void CpuWidget::onThreadListDoubleClick(const QModelIndex& index)
@@ -424,6 +550,7 @@ void CpuWidget::onFuncListContextMenu(QPoint pos)
 
 	connect(demangleAction, &QAction::triggered, [this] {
 		m_demangleFunctions = !m_demangleFunctions;
+		m_ui.disassemblyWidget->setDemangle(m_demangleFunctions);
 		updateFunctionList();
 	});
 
@@ -465,7 +592,7 @@ void CpuWidget::onFuncListContextMenu(QPoint pos)
 	m_funclistContextMenu->addAction(gotoMemory);
 
 
-	m_funclistContextMenu->popup(m_ui.listFunctions->mapToGlobal(pos));
+	m_funclistContextMenu->popup(m_ui.listFunctions->viewport()->mapToGlobal(pos));
 }
 
 void CpuWidget::onFuncListDoubleClick(QListWidgetItem* item)
@@ -496,7 +623,15 @@ void CpuWidget::onStackListContextMenu(QPoint pos)
 	});
 	contextMenu->addAction(actionCopy);
 
-	contextMenu->popup(m_ui.stackList->mapToGlobal(pos));
+	contextMenu->addSeparator();
+
+	QAction* actionExport = new QAction(tr("Copy all as CSV"), m_ui.stackList);
+	connect(actionExport, &QAction::triggered, [this]() {
+		QGuiApplication::clipboard()->setText(QtUtils::AbstractItemModelToCSV(m_ui.stackList->model()));
+	});
+	contextMenu->addAction(actionExport);
+
+	contextMenu->popup(m_ui.stackList->viewport()->mapToGlobal(pos));
 }
 
 void CpuWidget::onStackListDoubleClick(const QModelIndex& index)

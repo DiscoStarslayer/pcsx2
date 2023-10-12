@@ -140,7 +140,6 @@ set(pcsx2Sources
 	Vif_Codes.cpp
 	Vif_Transfer.cpp
 	Vif_Unpack.cpp
-	VirtualMemory.cpp
 	VMManager.cpp
 	vtlb.cpp
 	VU0.cpp
@@ -217,7 +216,6 @@ set(pcsx2Headers
 	Vif_Dma.h
 	Vif.h
 	Vif_Unpack.h
-	VirtualMemory.h
 	VMManager.h
 	vtlb.h
 	VUflags.h
@@ -1123,7 +1121,7 @@ target_link_libraries(PCSX2_FLAGS INTERFACE
 	imgui
 	fmt::fmt
 	ryml
-	chdr-static
+	libchdr
 	libzip::zip
 	cpuinfo
 	zydis
@@ -1224,11 +1222,6 @@ if (APPLE)
 	find_library(METAL_LIBRARY Metal)
 	find_library(QUARTZCORE_LIBRARY QuartzCore)
 	target_link_libraries(PCSX2_FLAGS INTERFACE ${METAL_LIBRARY} ${QUARTZCORE_LIBRARY})
-
-	# MacOS defaults to having a maximum protection of the __DATA segment of rw (non-executable)
-	# We have a bunch of page-sized arrays in bss that we use for jit
-	# Obviously not being able to make those arrays executable would be a problem
-	target_link_options(PCSX2_FLAGS INTERFACE -Wl,-segprot,__DATA,rwx,rw)
 endif()
 
 set_property(GLOBAL PROPERTY PCSX2_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})

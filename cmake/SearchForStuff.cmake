@@ -8,7 +8,6 @@ if (WIN32)
 	# We bundle everything on Windows
 	add_subdirectory(3rdparty/zlib EXCLUDE_FROM_ALL)
 	add_subdirectory(3rdparty/libpng EXCLUDE_FROM_ALL)
-	add_subdirectory(3rdparty/libjpeg EXCLUDE_FROM_ALL)
 	add_subdirectory(3rdparty/xz EXCLUDE_FROM_ALL)
 	add_subdirectory(3rdparty/D3D12MemAlloc EXCLUDE_FROM_ALL)
 	add_subdirectory(3rdparty/winpixeventruntime EXCLUDE_FROM_ALL)
@@ -120,6 +119,7 @@ add_subdirectory(3rdparty/fmt/fmt EXCLUDE_FROM_ALL)
 add_subdirectory(3rdparty/rapidyaml/rapidyaml EXCLUDE_FROM_ALL)
 add_subdirectory(3rdparty/lzma EXCLUDE_FROM_ALL)
 add_subdirectory(3rdparty/libchdr EXCLUDE_FROM_ALL)
+disable_compiler_warnings_for_target(libchdr)
 add_subdirectory(3rdparty/soundtouch EXCLUDE_FROM_ALL)
 
 # rapidyaml includes fast_float as a submodule, saves us pulling it in directly.
@@ -131,6 +131,7 @@ add_library(fast_float INTERFACE)
 target_include_directories(fast_float INTERFACE 3rdparty/rapidyaml/rapidyaml/ext/c4core/src/c4/ext/fast_float/include)
 
 add_subdirectory(3rdparty/jpgd EXCLUDE_FROM_ALL)
+add_subdirectory(3rdparty/libwebp EXCLUDE_FROM_ALL)
 add_subdirectory(3rdparty/simpleini EXCLUDE_FROM_ALL)
 add_subdirectory(3rdparty/imgui EXCLUDE_FROM_ALL)
 add_subdirectory(3rdparty/cpuinfo EXCLUDE_FROM_ALL)

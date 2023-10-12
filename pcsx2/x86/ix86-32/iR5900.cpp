@@ -22,10 +22,10 @@
 #include "GS.h"
 #include "Memory.h"
 #include "Patch.h"
+#include "System.h"
 #include "R3000A.h"
 #include "R5900OpcodeTables.h"
 #include "VMManager.h"
-#include "VirtualMemory.h"
 #include "vtlb.h"
 #include "x86/BaseblockEx.h"
 #include "x86/iR5900.h"
@@ -83,23 +83,23 @@ eeProfiler EE::Profiler;
 
 #define X86
 
-static RecompiledCodeReserve* recMem = NULL;
-static u8* recRAMCopy = NULL;
-static u8* recLutReserve_RAM = NULL;
+static u8* recRAMCopy = nullptr;
+static u8* recLutReserve_RAM = nullptr;
 static const size_t recLutSize = (Ps2MemSize::MainRam + Ps2MemSize::Rom + Ps2MemSize::Rom1 + Ps2MemSize::Rom2) * wordsize / 4;
 
-static BASEBLOCK* recRAM = NULL; // and the ptr to the blocks here
-static BASEBLOCK* recROM = NULL; // and here
-static BASEBLOCK* recROM1 = NULL; // also here
-static BASEBLOCK* recROM2 = NULL; // also here
+static BASEBLOCK* recRAM = nullptr; // and the ptr to the blocks here
+static BASEBLOCK* recROM = nullptr; // and here
+static BASEBLOCK* recROM1 = nullptr; // also here
+static BASEBLOCK* recROM2 = nullptr; // also here
 
 static BaseBlocks recBlocks;
-static u8* recPtr = NULL;
-EEINST* s_pInstCache = NULL;
+static u8* recPtr = nullptr;
+static u8* recPtrEnd = nullptr;
+EEINST* s_pInstCache = nullptr;
 static u32 s_nInstCacheSize = 0;
 
-static BASEBLOCK* s_pCurBlock = NULL;
-static BASEBLOCKEX* s_pCurBlockEx = NULL;
+static BASEBLOCK* s_pCurBlock = nullptr;
+static BASEBLOCKEX* s_pCurBlockEx = nullptr;
 u32 s_nEndBlock = 0; // what pc the current block ends
 u32 s_branchTo;
 static bool s_nBlockFF;
@@ -107,7 +107,7 @@ static bool s_nBlockFF;
 // save states for branches
 GPR_reg64 s_saveConstRegs[32];
 static u32 s_saveHasConstReg = 0, s_saveFlushedConstReg = 0;
-static EEINST* s_psaveInstInfo = NULL;
+static EEINST* s_psaveInstInfo = nullptr;
 
 static u32 s_savenBlockCycles = 0;
 
@@ -360,19 +360,13 @@ static void recRecompile(const u32 startpc);
 static void dyna_block_discard(u32 start, u32 sz);
 static void dyna_page_reset(u32 start, u32 sz);
 
-// Recompiled code buffer for EE recompiler dispatchers!
-alignas(__pagesize) static u8 eeRecDispatchers[__pagesize];
-
-typedef void DynGenFunc();
-
-static DynGenFunc* DispatcherEvent = NULL;
-static DynGenFunc* DispatcherReg = NULL;
-static DynGenFunc* JITCompile = NULL;
-static DynGenFunc* JITCompileInBlock = NULL;
-static DynGenFunc* EnterRecompiledCode = NULL;
-static DynGenFunc* ExitRecompiledCode = NULL;
-static DynGenFunc* DispatchBlockDiscard = NULL;
-static DynGenFunc* DispatchPageReset = NULL;
+static const void* DispatcherEvent = nullptr;
+static const void* DispatcherReg = nullptr;
+static const void* JITCompile = nullptr;
+static const void* JITCompileInBlock = nullptr;
+static const void* EnterRecompiledCode = nullptr;
+static const void* DispatchBlockDiscard = nullptr;
+static const void* DispatchPageReset = nullptr;
 
 static void recEventTest()
 {
@@ -387,13 +381,13 @@ static void recEventTest()
 
 // The address for all cleared blocks.  It recompiles the current pc and then
 // dispatches to the recompiled block address.
-static DynGenFunc* _DynGen_JITCompile()
+static const void* _DynGen_JITCompile()
 {
 	pxAssertMsg(DispatcherReg != NULL, "Please compile the DispatcherReg subroutine *before* JITComple.  Thanks.");
 
 	u8* retval = xGetAlignedCallTarget();
 
-	xFastCall((void*)recRecompile, ptr32[&cpuRegs.pc]);
+	xFastCall((const void*)recRecompile, ptr32[&cpuRegs.pc]);
 
 	// C equivalent:
 	// u32 addr = cpuRegs.pc;
@@ -405,18 +399,18 @@ static DynGenFunc* _DynGen_JITCompile()
 	xMOV(rcx, ptrNative[xComplexAddress(rcx, recLUT, rax * wordsize)]);
 	xJMP(ptrNative[rbx * (wordsize / 4) + rcx]);
 
-	return (DynGenFunc*)retval;
+	return retval;
 }
 
-static DynGenFunc* _DynGen_JITCompileInBlock()
+static const void* _DynGen_JITCompileInBlock()
 {
 	u8* retval = xGetAlignedCallTarget();
-	xJMP((void*)JITCompile);
-	return (DynGenFunc*)retval;
+	xJMP(JITCompile);
+	return retval;
 }
 
 // called when jumping to variable pc address
-static DynGenFunc* _DynGen_DispatcherReg()
+static const void* _DynGen_DispatcherReg()
 {
 	u8* retval = xGetPtr(); // fallthrough target, can't align it!
 
@@ -430,70 +424,67 @@ static DynGenFunc* _DynGen_DispatcherReg()
 	xMOV(rcx, ptrNative[xComplexAddress(rcx, recLUT, rax * wordsize)]);
 	xJMP(ptrNative[rbx * (wordsize / 4) + rcx]);
 
-	return (DynGenFunc*)retval;
+	return retval;
 }
 
-static DynGenFunc* _DynGen_DispatcherEvent()
+static const void* _DynGen_DispatcherEvent()
 {
 	u8* retval = xGetPtr();
 
-	xFastCall((void*)recEventTest);
+	xFastCall((const void*)recEventTest);
 
-	return (DynGenFunc*)retval;
+	return retval;
 }
 
-static DynGenFunc* _DynGen_EnterRecompiledCode()
+static const void* _DynGen_EnterRecompiledCode()
 {
 	pxAssertDev(DispatcherReg != NULL, "Dynamically generated dispatchers are required prior to generating EnterRecompiledCode!");
 
 	u8* retval = xGetAlignedCallTarget();
 
-	{ // Properly scope the frame prologue/epilogue
 #ifdef ENABLE_VTUNE
-		xScopedStackFrame frame(true, true);
+	xScopedStackFrame frame(true, true);
 #else
-		xScopedStackFrame frame(false, true);
+#ifdef _WIN32
+	// Shadow space for Win32
+	static constexpr u32 stack_size = 32 + 8;
+#else
+	// Stack still needs to be aligned
+	static constexpr u32 stack_size = 8;
 #endif
 
-		if (CHECK_FASTMEM)
-			xMOV(RFASTMEMBASE, ptrNative[&vtlb_private::vtlbdata.fastmem_base]);
+	// We never return through this function, instead we fastjmp() out.
+	// So we don't need to worry about preserving callee-saved registers, but we do need to align the stack.
+	xSUB(rsp, stack_size);
+#endif
 
-		xJMP((void*)DispatcherReg);
+	if (CHECK_FASTMEM)
+		xMOV(RFASTMEMBASE, ptrNative[&vtlb_private::vtlbdata.fastmem_base]);
 
-		// Save an exit point
-		ExitRecompiledCode = (DynGenFunc*)xGetPtr();
-	}
+	xJMP(DispatcherReg);
 
-	xRET();
-
-	return (DynGenFunc*)retval;
+	return retval;
 }
 
-static DynGenFunc* _DynGen_DispatchBlockDiscard()
+static const void* _DynGen_DispatchBlockDiscard()
 {
 	u8* retval = xGetPtr();
-	xFastCall((void*)dyna_block_discard);
-	xJMP((void*)ExitRecompiledCode);
-	return (DynGenFunc*)retval;
+	xFastCall((const void*)dyna_block_discard);
+	xJMP(DispatcherReg);
+	return retval;
 }
 
-static DynGenFunc* _DynGen_DispatchPageReset()
+static const void* _DynGen_DispatchPageReset()
 {
 	u8* retval = xGetPtr();
-	xFastCall((void*)dyna_page_reset);
-	xJMP((void*)ExitRecompiledCode);
-	return (DynGenFunc*)retval;
+	xFastCall((const void*)dyna_page_reset);
+	xJMP(DispatcherReg);
+	return retval;
 }
 
 static void _DynGen_Dispatchers()
 {
-	// In case init gets called multiple times:
-	HostSys::MemProtectStatic(eeRecDispatchers, PageAccess_ReadWrite());
-
-	// clear the buffer to 0xcc (easier debugging).
-	memset(eeRecDispatchers, 0xcc, __pagesize);
-
-	xSetPtr(eeRecDispatchers);
+	const u8* start = xGetAlignedCallTarget();
 
 	// Place the EventTest and DispatcherReg stuff at the top, because they get called the
 	// most and stand to benefit from strong alignment and direct referencing.
@@ -506,11 +497,9 @@ static void _DynGen_Dispatchers()
 	DispatchBlockDiscard = _DynGen_DispatchBlockDiscard();
 	DispatchPageReset = _DynGen_DispatchPageReset();
 
-	HostSys::MemProtectStatic(eeRecDispatchers, PageAccess_ExecOnly());
-
 	recBlocks.SetJITCompile(JITCompile);
 
-	Perf::any.Register((void*)eeRecDispatchers, 4096, "EE Dispatcher");
+	Perf::any.Register(start, static_cast<u32>(xGetPtr() - start), "EE Dispatcher");
 }
 
 
@@ -525,15 +514,9 @@ static __ri void ClearRecLUT(BASEBLOCK* base, int memsize)
 
 static void recReserve()
 {
-	if (recMem)
-		return;
+	recPtr = SysMemory::GetEERec();
+	recPtrEnd = SysMemory::GetEERecEnd() - _64kb;
 
-	recMem = new RecompiledCodeReserve("R5900 Recompiler Cache");
-	recMem->Assign(GetVmMemory().CodeMemory(), HostMemoryMap::EErecOffset, 64 * _1mb);
-}
-
-static void recAlloc()
-{
 	if (!recRAMCopy)
 	{
 		recRAMCopy = (u8*)_aligned_malloc(Ps2MemSize::MainRam, 4096);
@@ -590,17 +573,11 @@ static void recAlloc()
 		recLUT_SetPage(recLUT, hwLUT, recROM2, 0xa000, i, i - 0x1e40);
 	}
 
-	if (s_pInstCache == NULL)
-	{
-		s_nInstCacheSize = 128;
-		s_pInstCache = (EEINST*)malloc(sizeof(EEINST) * s_nInstCacheSize);
-		if (!s_pInstCache)
-			pxFailRel("Failed to allocate R5900 InstCache array");
-	}
-
-	// No errors.. Proceed with initialization:
-
-	_DynGen_Dispatchers();
+	pxAssertRel(!s_pInstCache, "InstCache not allocated");
+	s_nInstCacheSize = 128;
+	s_pInstCache = (EEINST*)malloc(sizeof(EEINST) * s_nInstCacheSize);
+	if (!s_pInstCache)
+		pxFailRel("Failed to allocate R5900 InstCache array");
 }
 
 alignas(16) static u16 manual_page[Ps2MemSize::MainRam >> 12];
@@ -613,9 +590,11 @@ static void recResetRaw()
 
 	EE::Profiler.Reset();
 
-	recAlloc();
+	xSetPtr(SysMemory::GetEERec());
+	_DynGen_Dispatchers();
+	vtlb_DynGenDispatchers();
+	recPtr = xGetPtr();
 
-	recMem->Reset();
 	ClearRecLUT((BASEBLOCK*)recLutReserve_RAM, recLutSize);
 	memset(recRAMCopy, 0, Ps2MemSize::MainRam);
 
@@ -628,26 +607,24 @@ static void recResetRaw()
 	mmap_ResetBlockTracking();
 	vtlb_ClearLoadStoreInfo();
 
-	x86SetPtr(*recMem);
-
-	recPtr = *recMem;
-
 	g_branch = 0;
 	g_resetEeScalingStats = true;
 }
 
-static void recShutdown()
+void recShutdown()
 {
-	safe_delete(recMem);
 	safe_aligned_free(recRAMCopy);
 	safe_aligned_free(recLutReserve_RAM);
 
 	recBlocks.Reset();
 
-	recRAM = recROM = recROM1 = recROM2 = NULL;
+	recRAM = recROM = recROM1 = recROM2 = nullptr;
 
 	safe_free(s_pInstCache);
 	s_nInstCacheSize = 0;
+
+	recPtr = nullptr;
+	recPtrEnd = nullptr;
 }
 
 void recStep()
@@ -720,13 +697,7 @@ static void recExecute()
 	if (!fastjmp_set(&m_SetJmp_StateCheck))
 	{
 		eeCpuExecuting = true;
-
-		// Important! Most of the console logging and such has cancel points in it.  This is great
-		// in Windows, where SEH lets us safely kill a thread from anywhere we want.  This is bad
-		// in Linux, which cannot have a C++ exception cross the recompiler.  Hence the changing
-		// of the cancelstate here!
-
-		EnterRecompiledCode();
+		((void(*)())EnterRecompiledCode)();
 
 		// Generally unreachable code here ...
 	}
@@ -931,7 +902,7 @@ void SetBranchImm(u32 imm)
 u8* recBeginThunk()
 {
 	// if recPtr reached the mem limit reset whole mem
-	if (recPtr >= (recMem->GetPtrEnd() - _64kb))
+	if (recPtr >= recPtrEnd)
 		eeRecNeedsReset = true;
 
 	xSetPtr(recPtr);
@@ -945,7 +916,7 @@ u8* recEndThunk()
 {
 	u8* block_end = x86Ptr;
 
-	pxAssert(block_end < recMem->GetPtrEnd());
+	pxAssert(block_end < recPtrEnd);
 	recPtr = block_end;
 	return block_end;
 }
@@ -1636,11 +1607,17 @@ void recMemcheck(u32 op, u32 bits, bool store)
 			// Preserve ecx (address) and edx (address+size) because we aren't breaking
 			// out of this loops iteration and dynarecMemLogcheck will clobber them
 			// Also keep 16 byte stack alignment
-			if(!(checks[i].result & MEMCHECK_BREAK))
+			if (!(checks[i].result & MEMCHECK_BREAK))
 			{
-				xPUSH(eax); xPUSH(ebx); xPUSH(ecx); xPUSH(edx);
+				xPUSH(eax);
+				xPUSH(ebx);
+				xPUSH(ecx);
+				xPUSH(edx);
 				xFastCall((void*)dynarecMemLogcheck, ecx, edx);
-				xPOP(edx); xPOP(ecx); xPOP(ebx); xPOP(eax);
+				xPOP(edx);
+				xPOP(ecx);
+				xPOP(ebx);
+				xPOP(eax);
 			}
 			else
 			{
@@ -1926,7 +1903,7 @@ void recompileNextInstruction(bool delayslot, bool swapped_delay_slot)
 						std::string disasm = "";
 						disR5900Fasm(disasm, memRead32(i), i, false);
 						Console.Warning("%x %s%08X %s", i, i == pc - 4 ? "*" : i == p ? "=" :
-                                                                                        " ",
+																						" ",
 							memRead32(i), disasm.c_str());
 					}
 					break;
@@ -1952,7 +1929,7 @@ void recompileNextInstruction(bool delayslot, bool swapped_delay_slot)
 							disasm = "";
 							disR5900Fasm(disasm, memRead32(i), i, false);
 							Console.Warning("%x %s%08X %s", i, i == pc - 4 ? "*" : i == p ? "=" :
-                                                                                            " ",
+																							" ",
 								memRead32(i), disasm.c_str());
 						}
 						break;
@@ -2224,7 +2201,7 @@ static void recRecompile(const u32 startpc)
 	pxAssert(startpc);
 
 	// if recPtr reached the mem limit reset whole mem
-	if (recPtr >= (recMem->GetPtrEnd() - _64kb))
+	if (recPtr >= recPtrEnd)
 		eeRecNeedsReset = true;
 
 	if (HWADDR(startpc) == VMManager::Internal::GetCurrentELFEntryPoint())
@@ -2757,7 +2734,7 @@ StartRecomp:
 		}
 	}
 
-	pxAssert(xGetPtr() < recMem->GetPtrEnd());
+	pxAssert(xGetPtr() < recPtrEnd);
 
 	s_pCurBlockEx->x86size = static_cast<u32>(xGetPtr() - recPtr);
 
@@ -2773,8 +2750,8 @@ StartRecomp:
 
 	pxAssert((g_cpuHasConstReg & g_cpuFlushedConstReg) == g_cpuHasConstReg);
 
-	s_pCurBlock = NULL;
-	s_pCurBlockEx = NULL;
+	s_pCurBlock = nullptr;
+	s_pCurBlockEx = nullptr;
 }
 
 R5900cpu recCpu = {

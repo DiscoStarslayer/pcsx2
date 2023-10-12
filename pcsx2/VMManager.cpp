@@ -147,7 +147,6 @@ namespace VMManager
 
 static constexpr u32 SETTINGS_VERSION = 1;
 
-static std::unique_ptr<SysMainMemory> s_vm_memory;
 static std::unique_ptr<SysCpuProviderPack> s_cpu_provider_pack;
 static std::unique_ptr<INISettingsInterface> s_game_settings_interface;
 static std::unique_ptr<INISettingsInterface> s_input_settings_interface;
@@ -356,14 +355,14 @@ bool VMManager::Internal::CPUThreadInitialize()
 	x86caps.SIMD_EstablishMXCSRmask();
 	SysLogMachineCaps();
 
-	pxAssert(!s_vm_memory && !s_cpu_provider_pack);
-	s_vm_memory = std::make_unique<SysMainMemory>();
-	s_cpu_provider_pack = std::make_unique<SysCpuProviderPack>();
-	if (!s_vm_memory->Allocate())
+	if (!SysMemory::Allocate())
 	{
 		Host::ReportErrorAsync("Error", "Failed to allocate VM memory.");
 		return false;
 	}
+
+	pxAssert(!s_cpu_provider_pack);
+	s_cpu_provider_pack = std::make_unique<SysCpuProviderPack>();
 
 	GSinit();
 	USBinit();
@@ -395,7 +394,6 @@ void VMManager::Internal::CPUThreadShutdown()
 	WaitForSaveStateFlush();
 
 	s_cpu_provider_pack.reset();
-	s_vm_memory.reset();
 
 	PerformanceMetrics::SetCPUThread(Threading::ThreadHandle());
 
@@ -404,14 +402,11 @@ void VMManager::Internal::CPUThreadShutdown()
 
 	MTGS::ShutdownThread();
 
+	SysMemory::Release();
+
 #ifdef _WIN32
 	CoUninitialize();
 #endif
-}
-
-SysMainMemory& GetVmMemory()
-{
-	return *s_vm_memory;
 }
 
 SysCpuProviderPack& GetCpuProviders()
@@ -1151,10 +1146,13 @@ bool VMManager::Initialize(VMBootParameters boot_params)
 		}
 	}
 
+	Error error;
 	Console.WriteLn("Opening CDVD...");
-	if (!DoCDVDopen())
+	if (!DoCDVDopen(&error))
 	{
-		Host::ReportErrorAsync("Startup Error", "Failed to initialize CDVD.");
+		Host::ReportErrorAsync("Startup Error", fmt::format("Failed to open CDVD '{}': {}.",
+													Path::GetFileName(CDVDsys_GetFile(CDVDsys_GetSourceType())),
+													error.GetDescription()));
 		return false;
 	}
 	ScopedGuard close_cdvd(&DoCDVDclose);
@@ -1190,7 +1188,7 @@ bool VMManager::Initialize(VMBootParameters boot_params)
 	// Check for resuming with hardcore mode.
 	Achievements::ResetHardcoreMode();
 	if (!state_to_load.empty() && Achievements::IsHardcoreModeActive() &&
-		!Achievements::ConfirmHardcoreModeDisable("Resuming state"))
+		!Achievements::ConfirmHardcoreModeDisable(TRANSLATE("VMManager", "Resuming state")))
 	{
 		return false;
 	}
@@ -1302,8 +1300,9 @@ bool VMManager::Initialize(VMBootParameters boot_params)
 	SetCPUState(EmuConfig.Cpu.sseMXCSR, EmuConfig.Cpu.sseVU0MXCSR, EmuConfig.Cpu.sseVU1MXCSR);
 	SysClearExecutionCache();
 	memBindConditionalHandlers();
-
+	SysMemory::Reset();
 	cpuReset();
+	hwReset();
 
 	Console.WriteLn("VM subsystems initialized in %.2f ms", init_timer.GetTimeMilliseconds());
 	s_state.store(VMState::Paused, std::memory_order_release);
@@ -1444,7 +1443,9 @@ void VMManager::Reset()
 
 	SysClearExecutionCache();
 	memBindConditionalHandlers();
+	SysMemory::Reset();
 	cpuReset();
+	hwReset();
 
 	if (g_InputRecording.isActive())
 	{
@@ -1691,7 +1692,7 @@ u32 VMManager::DeleteSaveStates(const char* game_serial, u32 game_crc, bool also
 
 bool VMManager::LoadState(const char* filename)
 {
-	if (Achievements::IsHardcoreModeActive() && !Achievements::ConfirmHardcoreModeDisable("Loading state"))
+	if (Achievements::IsHardcoreModeActive() && !Achievements::ConfirmHardcoreModeDisable(TRANSLATE("VMManager", "Loading state")))
 		return false;
 
 	// TODO: Save the current state so we don't need to reset.
@@ -1713,7 +1714,7 @@ bool VMManager::LoadStateFromSlot(s32 slot)
 		return false;
 	}
 
-	if (Achievements::IsHardcoreModeActive() && !Achievements::ConfirmHardcoreModeDisable("Loading state"))
+	if (Achievements::IsHardcoreModeActive() && !Achievements::ConfirmHardcoreModeDisable(TRANSLATE("VMManager", "Loading state")))
 		return false;
 
 	Host::AddIconOSDMessage("LoadStateFromSlot", ICON_FA_FOLDER_OPEN,
@@ -1901,7 +1902,7 @@ void VMManager::FrameAdvance(u32 num_frames /*= 1*/)
 	if (!HasValidVM())
 		return;
 
-	if (Achievements::IsHardcoreModeActive() && !Achievements::ConfirmHardcoreModeDisable("Frame advancing"))
+	if (Achievements::IsHardcoreModeActive() && !Achievements::ConfirmHardcoreModeDisable(TRANSLATE("VMManager", "Frame advancing")))
 		return;
 
 	s_frame_advance_count = num_frames;
@@ -1918,7 +1919,8 @@ bool VMManager::ChangeDisc(CDVD_SourceType source, std::string path)
 	if (!path.empty())
 		CDVDsys_SetFile(source, std::move(path));
 
-	const bool result = DoCDVDopen();
+	Error error;
+	const bool result = DoCDVDopen(&error);
 	if (result)
 	{
 		if (source == CDVD_SourceType::NoDisc)
@@ -1936,18 +1938,20 @@ bool VMManager::ChangeDisc(CDVD_SourceType source, std::string path)
 	{
 		Host::AddIconOSDMessage("ChangeDisc", ICON_FA_COMPACT_DISC,
 			fmt::format(
-				TRANSLATE_FS("VMManager", "Failed to open new disc image '{}'. Reverting to old image."), display_name),
+				TRANSLATE_FS("VMManager", "Failed to open new disc image '{}'. Reverting to old image.\nError was: {}"),
+				display_name, error.GetDescription()),
 			Host::OSD_ERROR_DURATION);
 		CDVDsys_ChangeSource(old_type);
 		if (!old_path.empty())
 			CDVDsys_SetFile(old_type, std::move(old_path));
-		if (!DoCDVDopen())
+		if (!DoCDVDopen(&error))
 		{
 			Host::AddIconOSDMessage("ChangeDisc", ICON_FA_COMPACT_DISC,
-				TRANSLATE_SV("VMManager", "Failed to switch back to old disc image. Removing disc."),
+					fmt::format(TRANSLATE_FS("VMManager", "Failed to switch back to old disc image. Removing disc.\nError was: {}"),
+					error.GetDescription()),
 				Host::OSD_CRITICAL_ERROR_DURATION);
 			CDVDsys_ChangeSource(CDVD_SourceType::NoDisc);
-			DoCDVDopen();
+			DoCDVDopen(nullptr);
 		}
 	}
 	cdvd.Tray.cdvdActionSeconds = 1;

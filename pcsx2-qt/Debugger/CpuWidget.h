@@ -29,6 +29,7 @@
 #include "QtHost.h"
 #include <QtWidgets/QWidget>
 #include <QtWidgets/QTableWidget>
+#include <QtCore/QSortFilterProxyModel>
 
 #include <vector>
 
@@ -59,6 +60,7 @@ public slots:
 	void contextBPListDelete();
 	void contextBPListNew();
 	void contextBPListEdit();
+	void contextBPListPasteCSV();
 
 	void updateThreads();
 	void onThreadListDoubleClick(const QModelIndex& index);
@@ -71,6 +73,7 @@ public slots:
 	void updateFunctionList(bool whenEmpty = false);
 	void onFuncListContextMenu(QPoint pos);
 	void onFuncListDoubleClick(QListWidgetItem* item);
+	bool getDemangleFunctions() const { return m_demangleFunctions; }
 
 	void reloadCPUWidgets()
 	{
@@ -103,6 +106,7 @@ private:
 
 	BreakpointModel m_bpModel;
 	ThreadModel m_threadModel;
+	QSortFilterProxyModel m_threadProxyModel;
 	StackModel m_stackModel;
 
 	bool m_demangleFunctions = true;
