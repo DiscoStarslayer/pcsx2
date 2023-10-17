@@ -28,18 +28,17 @@
 	PCORE(c, Voices[v].p)
 
 #define PVC(c, v)                          \
-	PVCP(c, v, Volume.Left.Reg_VOL)        \
-	,                                      \
+		PVCP(c, v, Volume.Left.Reg_VOL),   \
 		PVCP(c, v, Volume.Right.Reg_VOL),  \
 		PVCP(c, v, Pitch),                 \
 		PVCP(c, v, ADSR.regADSR1),         \
 		PVCP(c, v, ADSR.regADSR2),         \
-		PVCP(c, v, ADSR.Value) + 1,        \
-		PVCP(c, v, Volume.Left.Value) + 1, \
-		PVCP(c, v, Volume.Right.Value) + 1
+		PVCP(c, v, ADSR.Value),            \
+		PVCP(c, v, Volume.Left.Value),     \
+		PVCP(c, v, Volume.Right.Value)
 
 #define PVCA(c, v)                  \
-	PVCP(c, v, StartA) + 1,         \
+		PVCP(c, v, StartA) + 1,     \
 		PVCP(c, v, StartA),         \
 		PVCP(c, v, LoopStartA) + 1, \
 		PVCP(c, v, LoopStartA),     \
@@ -244,14 +243,14 @@ static std::array<u16*, 0x401> ComputeRegTable()
 		//0x760: weird area
 		PCORE(0, MasterVol.Left.Reg_VOL),
 		PCORE(0, MasterVol.Right.Reg_VOL),
-		PCORE(0, FxVol.Left) + 1,
-		PCORE(0, FxVol.Right) + 1,
-		PCORE(0, ExtVol.Left) + 1,
-		PCORE(0, ExtVol.Right) + 1,
-		PCORE(0, InpVol.Left) + 1,
-		PCORE(0, InpVol.Right) + 1,
-		PCORE(0, MasterVol.Left.Value) + 1,
-		PCORE(0, MasterVol.Right.Value) + 1,
+		PCORE(0, FxVol.Left),
+		PCORE(0, FxVol.Right),
+		PCORE(0, ExtVol.Left),
+		PCORE(0, ExtVol.Right),
+		PCORE(0, InpVol.Left),
+		PCORE(0, InpVol.Right),
+		PCORE(0, MasterVol.Left.Value),
+		PCORE(0, MasterVol.Right.Value),
 		PCORE(0, Revb.IIR_VOL),
 		PCORE(0, Revb.COMB1_VOL),
 		PCORE(0, Revb.COMB2_VOL),
@@ -265,14 +264,14 @@ static std::array<u16*, 0x401> ComputeRegTable()
 
 		PCORE(1, MasterVol.Left.Reg_VOL),
 		PCORE(1, MasterVol.Right.Reg_VOL),
-		PCORE(1, FxVol.Left) + 1,
-		PCORE(1, FxVol.Right) + 1,
-		PCORE(1, ExtVol.Left) + 1,
-		PCORE(1, ExtVol.Right) + 1,
-		PCORE(1, InpVol.Left) + 1,
-		PCORE(1, InpVol.Right) + 1,
-		PCORE(1, MasterVol.Left.Value) + 1,
-		PCORE(1, MasterVol.Right.Value) + 1,
+		PCORE(1, FxVol.Left),
+		PCORE(1, FxVol.Right),
+		PCORE(1, ExtVol.Left),
+		PCORE(1, ExtVol.Right),
+		PCORE(1, InpVol.Left),
+		PCORE(1, InpVol.Right),
+		PCORE(1, MasterVol.Left.Value),
+		PCORE(1, MasterVol.Right.Value),
 		PCORE(1, Revb.IIR_VOL),
 		PCORE(1, Revb.COMB1_VOL),
 		PCORE(1, Revb.COMB2_VOL),

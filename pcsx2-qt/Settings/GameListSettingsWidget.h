@@ -19,18 +19,21 @@
 
 #include "ui_GameListSettingsWidget.h"
 
-class SettingsDialog;
+class SettingsWindow;
 
 class GameListSettingsWidget : public QWidget
 {
 	Q_OBJECT
 
 public:
-	GameListSettingsWidget(SettingsDialog* dialog, QWidget* parent);
+	GameListSettingsWidget(SettingsWindow* dialog, QWidget* parent);
 	~GameListSettingsWidget();
 
 	bool addExcludedPath(const std::string& path);
 	void refreshExclusionList();
+
+Q_SIGNALS:
+	void preferEnglishGameListChanged();
 
 public Q_SLOTS:
 	void addSearchDirectory(QWidget* parent_widget);
@@ -46,7 +49,7 @@ private Q_SLOTS:
 	void onRescanAllGamesClicked();
 
 protected:
-	void resizeEvent(QResizeEvent* event);
+	bool event(QEvent* event);
 
 private:
 	void addPathToTable(const std::string& path, bool recursive);

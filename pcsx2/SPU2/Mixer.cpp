@@ -28,24 +28,6 @@ static const s32 tbl_XA_Factor[16][2] =
 		{98, -55},
 		{122, -60}};
 
-// Performs a 64-bit multiplication between two values and returns the
-// high 32 bits as a result (discarding the fractional 32 bits).
-// The combined fractional bits of both inputs must be 32 bits for this
-// to work properly.
-//
-// This is meant to be a drop-in replacement for times when the 'div' part
-// of a MulDiv is a constant.  (example: 1<<8, or 4096, etc)
-//
-// [Air] Performance breakdown: This is over 10 times faster than MulDiv in
-//   a *worst case* scenario.  It's also more accurate since it forces the
-//   caller to  extend the inputs so that they make use of all 32 bits of
-//   precision.
-//
-static __forceinline s32 MulShr32(s32 srcval, s32 mulval)
-{
-	return static_cast<s64>(srcval) * mulval >> 32;
-}
-
 __forceinline s32 clamp_mix(s32 x)
 {
 	return std::clamp(x, -0x8000, 0x7fff);
@@ -278,13 +260,9 @@ static __forceinline void GetNextDataDummy(V_Core& thiscore, uint voiceidx)
 /////////////////////////////////////////////////////////////////////////////////////////
 //                                                                                     //
 
-// Data is expected to be 16 bit signed (typical stuff!).
-// volume is expected to be 32 bit signed (31 bits with reverse phase)
-// Data is shifted up by 1 bit to give the output an effective 16 bit range.
 static __forceinline s32 ApplyVolume(s32 data, s32 volume)
 {
-	//return (volume * data) >> 15;
-	return MulShr32(data << 1, volume);
+	return (volume * data) >> 15;
 }
 
 static __forceinline StereoOut32 ApplyVolume(const StereoOut32& data, const V_VolumeLR& volume)
@@ -323,13 +301,13 @@ static __forceinline void CalculateADSR(V_Core& thiscore, uint voiceidx)
 {
 	V_Voice& vc(thiscore.Voices[voiceidx]);
 
-	if (vc.ADSR.Phase == 0)
+	if (vc.ADSR.Phase == V_ADSR::PHASE_STOPPED)
 	{
 		vc.ADSR.Value = 0;
 		return;
 	}
 
-	if (!vc.ADSR.Calculate())
+	if (!vc.ADSR.Calculate(thiscore.Index | (voiceidx << 1)))
 	{
 		if (IsDevBuild)
 		{
@@ -465,7 +443,7 @@ static __forceinline StereoOut32 MixVoice(uint coreidx, uint voiceidx)
 	StereoOut32 voiceOut(0, 0);
 	s32 Value = 0;
 
-	if (vc.ADSR.Phase > 0)
+	if (vc.ADSR.Phase > V_ADSR::PHASE_STOPPED)
 	{
 		if (vc.Noise)
 			Value = GetNoiseValues(thiscore);
@@ -679,19 +657,18 @@ __forceinline
 	}
 	else
 	{
-		Out.Left = MulShr32(Out.Left, Cores[1].MasterVol.Left.Value);
-		Out.Right = MulShr32(Out.Right, Cores[1].MasterVol.Right.Value);
+		Out.Left = ApplyVolume(Out.Left, Cores[1].MasterVol.Left.Value);
+		Out.Right = ApplyVolume(Out.Right, Cores[1].MasterVol.Right.Value);
 	}
 
-	// Final Clamp!
-	// Like any good audio system, the PS2 pumps the volume and incurs some distortion in its
-	// output, giving us a nice thumpy sound at times.  So we add 1 above (2x volume pump) and
-	// then clamp it all here.
-
-	// Edit: I'm sorry Jake, but I know of no good audio system that arbitrary distorts and clips
-	// output by design.
-	// Good thing though that this code gets the volume exactly right, as per tests :)
+	// For a long time PCSX2 has had its output volume halved by
+	// an incorrect function for applying the master volume above.
+	//
+	// Adjust volume here so it matches what people have come to expect.
+	Out = ApplyVolume(Out, {0x4fff, 0x4fff});
 	Out = DCFilter(Out);
+
+	// Final clamp, take care not to exceed 16 bits from here on
 	Out = clamp_mix(Out);
 	SndBuffer::Write(StereoOut16(Out));
 

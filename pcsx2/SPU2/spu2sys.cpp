@@ -103,27 +103,8 @@ __forceinline void spu2M_Write(u32 addr, u16 value)
 	spu2M_Write(addr, (s16)value);
 }
 
-V_VolumeLR V_VolumeLR::Max(0x7FFFFFFF);
-V_VolumeSlideLR V_VolumeSlideLR::Max(0x3FFF, 0x7FFFFFFF);
-
-V_Core::V_Core(int coreidx)
-	: Index(coreidx)
-//LogFile_AutoDMA( nullptr )
-{
-	/*char fname[128];
-	sprintf( fname, "logs/adma%d.raw", GetDmaIndex() );
-	LogFile_AutoDMA = fopen( fname, "wb" );*/
-}
-
-V_Core::~V_Core() throw()
-{
-	// Can't use this yet because we dumb V_Core into savestates >_<
-	/*if( LogFile_AutoDMA != nullptr )
-	{
-		fclose( LogFile_AutoDMA );
-		LogFile_AutoDMA = nullptr;
-	}*/
-}
+V_VolumeLR V_VolumeLR::Max(0x7FFF);
+V_VolumeSlideLR V_VolumeSlideLR::Max(0x3FFF, 0x7FFF);
 
 void V_Core::Init(int index)
 {
@@ -207,6 +188,7 @@ void V_Core::Init(int index)
 		Voices[v].Volume = V_VolumeSlideLR(0, 0); // V_VolumeSlideLR::Max;
 		Voices[v].SCurrent = 28;
 
+		Voices[v].ADSR.Counter = 0;
 		Voices[v].ADSR.Value = 0;
 		Voices[v].ADSR.Phase = 0;
 		Voices[v].Pitch = 0x3FFF;
@@ -236,7 +218,7 @@ void V_Voice::Start()
 void V_Voice::Stop()
 {
 	ADSR.Value = 0;
-	ADSR.Phase = 0;
+	ADSR.Phase = V_ADSR::PHASE_STOPPED;
 }
 
 uint TickInterval = 768;
@@ -255,9 +237,7 @@ __forceinline bool StartQueuedVoice(uint coreidx, uint voiceidx)
 		vc.StartA = (vc.StartA + 0xFFFF8) + 0x8;
 	}
 
-	vc.ADSR.Releasing = false;
-	vc.ADSR.Value = 1;
-	vc.ADSR.Phase = 1;
+	vc.ADSR.Attack();
 	vc.SCurrent = 28;
 	vc.LoopMode = 0;
 
@@ -479,18 +459,6 @@ __forceinline void UpdateSpdifMode()
 	}
 }
 
-// Converts an SPU2 register volume write into a 32 bit SPU2 volume.  The value is extended
-// properly into the lower 16 bits of the value to provide a full spectrum of volumes.
-static s32 GetVol32(u16 src)
-{
-	return ((static_cast<s32>(src)) << 16) | ((src << 1) & 0xffff);
-}
-
-void V_VolumeSlide::RegSet(u16 src)
-{
-	Value = GetVol32(src);
-}
-
 static u32 map_spu1to2(u32 addr)
 {
 	return addr * 4 + (addr >= 0x200 ? 0xc0000 : 0);
@@ -520,26 +488,7 @@ void V_Core::WriteRegPS1(u32 mem, u16 value)
 			case 0x2: //VOLR (Volume R)
 			{
 				V_VolumeSlide& thisvol = vval == 0 ? Voices[voice].Volume.Left : Voices[voice].Volume.Right;
-				thisvol.Reg_VOL = value;
-
-				if (value & 0x8000) // +Lin/-Lin/+Exp/-Exp
-				{
-					thisvol.Mode = (value & 0xF000) >> 12;
-					thisvol.Increment = (value & 0x7F);
-					// We're not sure slides work 100%
-					if (SPU2::MsgToConsole())
-						SPU2::ConLog("* SPU2: Voice uses Slides in Mode = %x, Increment = %x\n", thisvol.Mode, thisvol.Increment);
-				}
-				else
-				{
-					// Constant Volume mode (no slides or envelopes)
-					// Volumes range from 0x3fff to 0x7fff, with 0x4000 serving as
-					// the "sign" bit, so a simple bitwise extension will do the trick:
-
-					thisvol.RegSet(value << 1);
-					thisvol.Mode = 0;
-					thisvol.Increment = 0;
-				}
+				thisvol.RegSet(value);
 				//ConLog("voice %x VOL%c write: %x\n", voice, vval == 0 ? 'L' : 'R', value);
 				break;
 			}
@@ -554,16 +503,18 @@ void V_Core::WriteRegPS1(u32 mem, u16 value)
 
 			case 0x8: // ADSR1 (Envelope)
 				Voices[voice].ADSR.regADSR1 = value;
+				Voices[voice].ADSR.UpdateCache();
 				//ConLog("voice %x regADSR1 write: %x\n", voice, Voices[voice].ADSR.regADSR1);
 				break;
 
 			case 0xa: // ADSR2 (Envelope)
 				Voices[voice].ADSR.regADSR2 = value;
+				Voices[voice].ADSR.UpdateCache();
 				//ConLog("voice %x regADSR2 write: %x\n", voice, Voices[voice].ADSR.regADSR2);
 				break;
 			case 0xc: // Voice 0..23 ADSR Current Volume
 				// not commonly set by games
-				Voices[voice].ADSR.Value = value * 0x10001U;
+				Voices[voice].ADSR.Value = value;
 				if (SPU2::MsgToConsole())
 					SPU2::ConLog("voice %x ADSR.Value write: %x\n", voice, Voices[voice].ADSR.Value);
 				break;
@@ -580,21 +531,19 @@ void V_Core::WriteRegPS1(u32 mem, u16 value)
 		switch (reg)
 		{
 			case 0x1d80: //         Mainvolume left
-				MasterVol.Left.Mode = 0;
 				MasterVol.Left.RegSet(value);
 				break;
 
 			case 0x1d82: //         Mainvolume right
-				MasterVol.Right.Mode = 0;
 				MasterVol.Right.RegSet(value);
 				break;
 
 			case 0x1d84: //         Reverberation depth left
-				FxVol.Left = GetVol32(value);
+				FxVol.Left = SignExtend16(value);
 				break;
 
 			case 0x1d86: //         Reverberation depth right
-				FxVol.Right = GetVol32(value);
+				FxVol.Right = SignExtend16(value);
 				break;
 
 			case 0x1d88: //         Voice ON  (0-15)
@@ -879,7 +828,7 @@ u16 V_Core::ReadRegPS1(u32 mem)
 				value = Voices[voice].ADSR.regADSR2;
 				break;
 			case 0xc:                                   // Voice 0..23 ADSR Current Volume
-				value = Voices[voice].ADSR.Value >> 16; // no clue
+				value = Voices[voice].ADSR.Value;
 				//if (value != 0) ConLog("voice %d read ADSR.Value result = %x\n", voice, value);
 				break;
 			case 0xe:
@@ -894,16 +843,16 @@ u16 V_Core::ReadRegPS1(u32 mem)
 		switch (reg)
 		{
 			case 0x1d80:
-				value = MasterVol.Left.Value >> 16;
+				value = MasterVol.Left.Value;
 				break;
 			case 0x1d82:
-				value = MasterVol.Right.Value >> 16;
+				value = MasterVol.Right.Value;
 				break;
 			case 0x1d84:
-				value = FxVol.Left >> 16;
+				value = FxVol.Left;
 				break;
 			case 0x1d86:
-				value = FxVol.Right >> 16;
+				value = FxVol.Right;
 				break;
 
 			case 0x1d88:
@@ -1006,26 +955,7 @@ static void RegWrite_VoiceParams(u16 value)
 		case 1: //VOLR (Volume R)
 		{
 			V_VolumeSlide& thisvol = (param == 0) ? thisvoice.Volume.Left : thisvoice.Volume.Right;
-			thisvol.Reg_VOL = value;
-
-			if (value & 0x8000) // +Lin/-Lin/+Exp/-Exp
-			{
-				thisvol.Mode = (value & 0xF000) >> 12;
-				thisvol.Increment = (value & 0x7F);
-				// We're not sure slides work 100%
-				if (SPU2::MsgToConsole())
-					SPU2::ConLog("* SPU2: Voice uses Slides in Mode = %x, Increment = %x\n", thisvol.Mode, thisvol.Increment);
-			}
-			else
-			{
-				// Constant Volume mode (no slides or envelopes)
-				// Volumes range from 0x3fff to 0x7fff, with 0x4000 serving as
-				// the "sign" bit, so a simple bitwise extension will do the trick:
-
-				thisvol.RegSet(value << 1);
-				thisvol.Mode = 0;
-				thisvol.Increment = 0;
-			}
+			thisvol.RegSet(value);
 		}
 		break;
 
@@ -1035,22 +965,20 @@ static void RegWrite_VoiceParams(u16 value)
 
 		case 3: // ADSR1 (Envelope)
 			thisvoice.ADSR.regADSR1 = value;
+			thisvoice.ADSR.UpdateCache();
 			break;
 
 		case 4: // ADSR2 (Envelope)
 			thisvoice.ADSR.regADSR2 = value;
+			thisvoice.ADSR.UpdateCache();
 			break;
 
-			// REG_VP_ENVX, REG_VP_VOLXL and REG_VP_VOLXR have been confirmed to not be allowed to be written to, so code has been commented out.
+			// REG_VP_ENVX, REG_VP_VOLXL and REG_VP_VOLXR are all writable, only ENVX has any effect when written to.
 			// Colin McRae Rally 2005 triggers case 5 (ADSR), but it doesn't produce issues enabled or disabled.
 
 		case 5:
-			// [Air] : Mysterious ADSR set code.  Too bad none of my games ever use it.
-			//      (as usual... )
-			//thisvoice.ADSR.Value = (value << 16) | value;
-			//ConLog("* SPU2: Mysterious ADSR Volume Set to 0x%x\n", value);
+			thisvoice.ADSR.Value = value;
 			break;
-
 		case 6:
 			//thisvoice.Volume.Left.RegSet(value);
 			break;
@@ -1430,49 +1358,32 @@ static void RegWrite_CoreExt(u16 value)
 		case REG_P_MVOLR:
 		{
 			V_VolumeSlide& thisvol = (addr == REG_P_MVOLL) ? thiscore.MasterVol.Left : thiscore.MasterVol.Right;
-
-			if (value & 0x8000) // +Lin/-Lin/+Exp/-Exp
-			{
-				thisvol.Mode = (value & 0xF000) >> 12;
-				thisvol.Increment = (value & 0x7F);
-				//printf("slides Mode = %x, Increment = %x\n",thisvol.Mode,thisvol.Increment);
-			}
-			else
-			{
-				// Constant Volume mode (no slides or envelopes)
-				// Volumes range from 0x3fff to 0x7fff, with 0x4000 serving as
-				// the "sign" bit, so a simple bitwise extension will do the trick:
-
-				thisvol.Value = GetVol32(value << 1);
-				thisvol.Mode = 0;
-				thisvol.Increment = 0;
-			}
-			thisvol.Reg_VOL = value;
+			thisvol.RegSet(value);
 		}
 		break;
 
 		case REG_P_EVOLL:
-			thiscore.FxVol.Left = GetVol32(value);
+			thiscore.FxVol.Left = SignExtend16(value);
 			break;
 
 		case REG_P_EVOLR:
-			thiscore.FxVol.Right = GetVol32(value);
+			thiscore.FxVol.Right = SignExtend16(value);
 			break;
 
 		case REG_P_AVOLL:
-			thiscore.ExtVol.Left = GetVol32(value);
+			thiscore.ExtVol.Left = SignExtend16(value);
 			break;
 
 		case REG_P_AVOLR:
-			thiscore.ExtVol.Right = GetVol32(value);
+			thiscore.ExtVol.Right = SignExtend16(value);
 			break;
 
 		case REG_P_BVOLL:
-			thiscore.InpVol.Left = GetVol32(value);
+			thiscore.InpVol.Left = SignExtend16(value);
 			break;
 
 		case REG_P_BVOLR:
-			thiscore.InpVol.Right = GetVol32(value);
+			thiscore.InpVol.Right = SignExtend16(value);
 			break;
 
 			// MVOLX has been confirmed to not be allowed to be written to, so cases have been added as a no-op.
@@ -1836,7 +1747,7 @@ void StartVoices(int core, u32 value)
 					   (Cores[core].VoiceGates[vc].WetL) ? "+" : "-", (Cores[core].VoiceGates[vc].WetR) ? "+" : "-",
 					   *(u16*)GetMemPtr(thisvc.StartA),
 					   thisvc.Pitch,
-					   thisvc.Volume.Left.Value >> 16, thisvc.Volume.Right.Value >> 16,
+					   thisvc.Volume.Left.Value, thisvc.Volume.Right.Value,
 					   thisvc.ADSR.regADSR1, thisvc.ADSR.regADSR2);
 			}
 		}
@@ -1863,7 +1774,7 @@ void StopVoices(int core, u32 value)
 			continue;
 		}
 
-		Cores[core].Voices[vc].ADSR.Releasing = true;
+		Cores[core].Voices[vc].ADSR.Release();
 		if (SPU2::MsgKeyOnOff())
 			SPU2::ConLog("* SPU2: KeyOff: Core %d; Voice %d.\n", core, vc);
 	}

@@ -30,11 +30,20 @@
 #include "MainWindow.h"
 #include "QtHost.h"
 #include "QtUtils.h"
+#include "SettingWidgetBinder.h"
 
-GameListSettingsWidget::GameListSettingsWidget(SettingsDialog* dialog, QWidget* parent)
+GameListSettingsWidget::GameListSettingsWidget(SettingsWindow* dialog, QWidget* parent)
 	: QWidget(parent)
 {
+	SettingsInterface* sif = dialog->getSettingsInterface();
+
 	m_ui.setupUi(this);
+
+	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.preferEnglishGameList, "UI", "PreferEnglishGameList", false);
+	connect(m_ui.preferEnglishGameList, &QCheckBox::stateChanged, [this]{ emit preferEnglishGameListChanged(); });
+
+	dialog->registerWidgetHelp(m_ui.preferEnglishGameList, tr("Prefer English Titles"), tr("Unchecked"),
+		tr("For games with both a title in the game's native language and one in English, prefer the English title."));
 
 	m_ui.searchDirectoryList->setSelectionMode(QAbstractItemView::SingleSelection);
 	m_ui.searchDirectoryList->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -84,11 +93,22 @@ void GameListSettingsWidget::refreshExclusionList()
 		m_ui.excludedPaths->addItem(QString::fromStdString(path));
 }
 
-void GameListSettingsWidget::resizeEvent(QResizeEvent* event)
+bool GameListSettingsWidget::event(QEvent* event)
 {
-	QWidget::resizeEvent(event);
+	bool res = QWidget::event(event);
 
-	QtUtils::ResizeColumnsForTableView(m_ui.searchDirectoryList, {-1, 100});
+	switch (event->type())
+	{
+		case QEvent::LayoutRequest:
+		case QEvent::Resize:
+			QtUtils::ResizeColumnsForTableView(m_ui.searchDirectoryList, {-1, 100});
+			break;
+
+		default:
+			break;
+	}
+
+	return res;
 }
 
 void GameListSettingsWidget::addPathToTable(const std::string& path, bool recursive)
