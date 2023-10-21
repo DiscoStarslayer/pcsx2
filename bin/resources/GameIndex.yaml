@@ -4053,7 +4053,6 @@ SCES-50408:
     mipmap: 2 # Fixes missing floor texture.
     trilinearFiltering: 1 # Fixes fog effect.
     wildArmsHack: 1 # Fixes misaligment depth of field effect.
-    roundSprite: 2 # Fixes misaligment depth of field effect even more.
 SCES-50409:
   name: "MotoGP 2"
   region: "PAL-M5"
@@ -7278,7 +7277,6 @@ SCPS-15017:
     mipmap: 2 # Fixes missing floor texture.
     trilinearFiltering: 1 # Fixes fog effect.
     wildArmsHack: 1 # Fixes misaligment depth of field effect.
-    roundSprite: 2 # Fixes misaligment depth of field effect even more.
 SCPS-15018:
   name: THE 山手線 〜Train Simulator Real
   name-sort: THE やまてせん 〜Train Simulator Real
@@ -8218,7 +8216,6 @@ SCPS-19201:
     mipmap: 2 # Fixes missing floor texture.
     trilinearFiltering: 1 # Fixes fog effect.
     wildArmsHack: 1 # Fixes misaligment depth of field effect.
-    roundSprite: 2 # Fixes misaligment depth of field effect even more.
 SCPS-19202:
   name: EXTERMINATION PS2 the Best
   name-sort: EXTERMINATION PS2 the Best
@@ -9442,7 +9439,6 @@ SCUS-97167:
     mipmap: 2 # Fixes missing floor texture.
     trilinearFiltering: 1 # Fixes fog effect.
     wildArmsHack: 1 # Fixes misaligment depth of field effect.
-    roundSprite: 2 # Fixes misaligment depth of field effect even more.
 SCUS-97169:
   name: "Drakan - The Ancients' Gates [Demo]"
   region: "NTSC-U"
@@ -38318,6 +38314,11 @@ SLPM-65746:
   name-sort: FIFAとーたるふっとぼーる2
   name-en: "FIFA Total Football 2"
   region: "NTSC-J"
+  gameFixes:
+    - EETimingHack # Fixes broken rendering.
+  gsHWFixes:
+    mipmap: 2 # Mipmap + trilinear, improves ground textures to match sw renderer.
+    trilinearFiltering: 1
 SLPM-65747:
   name: "Hagane no Renkinjutsushi 2 - Akaki Elixir no Akuma"
   region: "NTSC-J"
