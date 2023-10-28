@@ -61,23 +61,35 @@ CpuWidget::CpuWidget(QWidget* parent, DebugInterface& cpu)
 	connect(m_ui.breakpointList, &QTableView::customContextMenuRequested, this, &CpuWidget::onBPListContextMenu);
 	connect(m_ui.breakpointList, &QTableView::doubleClicked, this, &CpuWidget::onBPListDoubleClicked);
 
-	m_ui.breakpointList->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
 	m_ui.breakpointList->setModel(&m_bpModel);
+	for (std::size_t i = 0; auto mode : BreakpointModel::HeaderResizeModes)
+	{
+		m_ui.breakpointList->horizontalHeader()->setSectionResizeMode(i, mode);
+		i++;
+	}
 
 	connect(m_ui.threadList, &QTableView::customContextMenuRequested, this, &CpuWidget::onThreadListContextMenu);
 	connect(m_ui.threadList, &QTableView::doubleClicked, this, &CpuWidget::onThreadListDoubleClick);
 
-	m_ui.threadList->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
 	m_threadProxyModel.setSourceModel(&m_threadModel);
 	m_ui.threadList->setModel(&m_threadProxyModel);
 	m_ui.threadList->setSortingEnabled(true);
 	m_ui.threadList->sortByColumn(ThreadModel::ThreadColumns::ID, Qt::SortOrder::AscendingOrder);
+	for (std::size_t i = 0; auto mode : ThreadModel::HeaderResizeModes)
+	{
+		m_ui.threadList->horizontalHeader()->setSectionResizeMode(i, mode);
+		i++;
+	}
 
 	connect(m_ui.stackList, &QTableView::customContextMenuRequested, this, &CpuWidget::onStackListContextMenu);
 	connect(m_ui.stackList, &QTableView::doubleClicked, this, &CpuWidget::onStackListDoubleClick);
 
-	m_ui.stackList->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
 	m_ui.stackList->setModel(&m_stackModel);
+	for (std::size_t i = 0; auto mode : StackModel::HeaderResizeModes)
+	{
+		m_ui.stackList->horizontalHeader()->setSectionResizeMode(i, mode);
+		i++;
+	}
 
 	connect(m_ui.tabWidgetRegFunc, &QTabWidget::currentChanged, [this](int i) {if(i == 1){updateFunctionList(true);} });
 	connect(m_ui.listFunctions, &QListWidget::customContextMenuRequested, this, &CpuWidget::onFuncListContextMenu);
@@ -246,7 +258,7 @@ void CpuWidget::onBPListDoubleClicked(const QModelIndex& index)
 	{
 		if (index.column() == BreakpointModel::OFFSET)
 		{
-			m_ui.disassemblyWidget->gotoAddress(m_bpModel.data(index, Qt::UserRole).toUInt());
+			m_ui.disassemblyWidget->gotoAddress(m_bpModel.data(index, BreakpointModel::DataRole).toUInt());
 		}
 	}
 }
@@ -285,8 +297,8 @@ void CpuWidget::onBPListContextMenu(QPoint pos)
 	contextMenu->addSeparator();
 	QAction* actionExport = new QAction(tr("Copy all as CSV"), m_ui.breakpointList);
 	connect(actionExport, &QAction::triggered, [this]() {
-		// It's important to use the User Role here to allow pasting to be translation agnostic
-		QGuiApplication::clipboard()->setText(QtUtils::AbstractItemModelToCSV(m_ui.breakpointList->model(), Qt::UserRole));
+		// It's important to use the Export Role here to allow pasting to be translation agnostic
+		QGuiApplication::clipboard()->setText(QtUtils::AbstractItemModelToCSV(m_ui.breakpointList->model(), BreakpointModel::ExportRole));
 	});
 	contextMenu->addAction(actionExport);
 
@@ -429,7 +441,7 @@ void CpuWidget::contextBPListPasteCSV()
 			}
 
 			// Size
-			mc.end = fields[2].toUInt(&ok, 16) + mc.start;
+			mc.end = fields[2].toUInt(&ok) + mc.start;
 			if (!ok)
 			{
 				Console.WriteLn("Debugger CSV Import: Failed to parse length '%s', skipping", fields[1].toUtf8().constData());

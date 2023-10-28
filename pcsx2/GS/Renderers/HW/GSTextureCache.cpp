@@ -1050,7 +1050,7 @@ GSTextureCache::Source* GSTextureCache::LookupSource(const GIFRegTEX0& TEX0, con
 				const bool width_match = (std::max(64U, bw * 64U) >> GSLocalMemory::m_psm[psm].info.pageShiftX()) ==
 					(std::max(64U, t->m_TEX0.TBW * 64U) >> GSLocalMemory::m_psm[t->m_TEX0.PSM].info.pageShiftX());
 
-				if (bp == t->m_TEX0.TBP0 && !t->m_dirty.empty() && overlaps && GSUtil::GetChannelMask(psm) == GSUtil::GetChannelMask(t->m_TEX0.PSM))
+				if (bp == t->m_TEX0.TBP0 && !t->m_dirty.empty() && overlaps && GSUtil::GetChannelMask(psm) == GSUtil::GetChannelMask(t->m_TEX0.PSM) && GSRendererHW::GetInstance()->m_draw_transfers.size() > 0)
 				{
 					bool can_use = true;
 
@@ -2846,6 +2846,13 @@ void GSTextureCache::InvalidateVideoMem(const GSOffset& off, const GSVector4i& r
 						delete t;
 					}
 				}
+			}
+			// This is a situation where it is uploading in to the alpha channel but that is not part of the mask for the target format.
+			// So we need to make sure the alpha is not marked as valid. (Juiced does a shuffle on the Z24 depth, making the alpha valid data).
+			else if (GSUtil::GetChannelMask(psm) == 0x8 && GSUtil::GetChannelMask(t->m_TEX0.PSM) == 0x7 && t->Overlaps(bp, bw, psm, r))
+			{
+				t->m_valid_alpha_high &= !(psm == PSMT8H || psm == PSMT4HH);
+				t->m_valid_alpha_low &= !(psm == PSMT8H || psm == PSMT4HL);
 			}
 		}
 	}

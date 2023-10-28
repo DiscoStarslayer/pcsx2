@@ -377,6 +377,21 @@ void DisassemblyWidget::paintEvent(QPaintEvent* event)
 		QString lineString = DisassemblyStringFromAddress(rowAddress, painter.font(), curPC, rowAddress == m_selectedAddressStart);
 
 		painter.drawText(2, i * m_rowHeight, w, m_rowHeight, Qt::AlignLeft, lineString);
+
+		// Breakpoint marker
+		bool enabled;
+		if (CBreakPoints::IsAddressBreakPoint(m_cpu->getCpuType(), rowAddress, &enabled) && !CBreakPoints::IsTempBreakPoint(m_cpu->getCpuType(), rowAddress))
+		{
+			if (enabled)
+			{
+				painter.setPen(Qt::green);
+				painter.drawText(2, i * m_rowHeight, w, m_rowHeight, Qt::AlignLeft, "\u25A0");
+			}
+			else
+			{
+				painter.drawText(2, i * m_rowHeight, w, m_rowHeight, Qt::AlignLeft, "\u2612");
+			}
+		}
 		alternate = !alternate;
 	}
 	// Draw the branch lines
@@ -609,6 +624,7 @@ void DisassemblyWidget::keyPressEvent(QKeyEvent* event)
 			contextCopyInstructionText();
 			break;
 		case Qt::Key_B:
+		case Qt::Key_Space:
 			contextToggleBreakpoint();
 			break;
 		case Qt::Key_M:
@@ -697,21 +713,33 @@ inline QString DisassemblyWidget::DisassemblyStringFromAddress(u32 address, QFon
 	const bool isConditionalMet = line.info.conditionMet;
 	const bool isCurrentPC = m_cpu->getPC() == address;
 
-	const bool isBreakpoint = CBreakPoints::IsAddressBreakPoint(m_cpu->getCpuType(), address) && !CBreakPoints::IsTempBreakPoint(m_cpu->getCpuType(), address);
 	const std::string addressSymbol = m_cpu->GetSymbolMap().GetLabelString(address);
 
 	const auto demangler = demangler::CDemangler::createGcc();
 
-	QString lineString("%1 %2  %3 %4  %5 %6");
+	QString lineString("  %1  %2 %3  %4 %5");
 
-	lineString = lineString.arg(isBreakpoint ? "\u25A0" : " "); // Bp block ( ■ )
 	if (addressSymbol.empty()) // The address wont have symbol text if it's the start of a function for example
 		lineString = lineString.arg(address, 8, 16, QChar('0')).toUpper();
 	else
 	{
 		// We want this text elided
 		QFontMetrics metric(font);
-		lineString = lineString.arg(metric.elidedText(QString::fromStdString((m_demangleFunctions ? demangler->demangleToString(addressSymbol) : addressSymbol)), Qt::ElideRight, (selected ? 32 : 8) * font.pointSize()));
+		QString symbolString;
+		if (m_demangleFunctions)
+		{
+			symbolString = QString::fromStdString(demangler->demangleToString(addressSymbol));
+			if (symbolString.isEmpty())
+			{
+				symbolString = QString::fromStdString(addressSymbol);
+			}
+		}
+		else
+		{
+			symbolString = QString::fromStdString(addressSymbol);
+		}
+
+		lineString = lineString.arg(metric.elidedText(symbolString, Qt::ElideRight, (selected ? 32 : 8) * font.pointSize()));
 	}
 
 	lineString = lineString.leftJustified(4, ' ') // Address / symbol
