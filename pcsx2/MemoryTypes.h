@@ -18,14 +18,14 @@
 
 namespace Ps2MemSize
 {
-	static const uint MainRam	= _32mb;			// 32 MB main memory!
+	static const uint MainRam	= _64mb;			// 32 MB main memory!
 	static const uint Rom		= _1mb * 4;			// 4 MB main rom
 	static const uint Rom1		= _1mb * 4;			// DVD player
 	static const uint Rom2		= 0x00080000;		// Chinese rom extension
 	static const uint Hardware	= _64kb;
 	static const uint Scratch	= _16kb;
 
-	static const uint IopRam	= _1mb * 2;			// 2MB main ram on the IOP.
+	static const uint IopRam	= _1mb * 8;			// 8MB main ram on the IOP.
 	static const uint IopHardware = _64kb;
 
 	static const uint GSregs = 0x00002000;			// 8k for the GS registers and stuff.

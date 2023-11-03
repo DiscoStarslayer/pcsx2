@@ -35,49 +35,49 @@ namespace HostMemoryMap
 	//////////////////////////////////////////////////////////////////////////
 	// Main
 	//////////////////////////////////////////////////////////////////////////
-	static const u32 MainSize = 0x14000000;
+	static const u32 MainSize = 0x18600000;
 
 	// PS2 main memory, SPR, and ROMs (approximately 40.5MB, but we round up to 64MB for simplicity).
 	static const u32 EEmemOffset   = 0x00000000;
 
 	// IOP main memory and ROMs
-	static const u32 IOPmemOffset  = 0x04000000;
+	static const u32 IOPmemOffset  = 0x06000000;
 
 	// VU0 and VU1 memory.
-	static const u32 VUmemOffset   = 0x08000000;
+	static const u32 VUmemOffset   = 0x0A600000;
 
 	// Bump allocator for any other small allocations
 	// size: Difference between it and HostMemoryMap::Size, so nothing should allocate higher than it!
-	static const u32 bumpAllocatorOffset = 0x10000000;
+	static const u32 bumpAllocatorOffset = 0x14600000;
 
 	//////////////////////////////////////////////////////////////////////////
 	// Code
 	//////////////////////////////////////////////////////////////////////////
-	static const u32 CodeSize = 0x13100000; // 305 mb
+	static const u32 CodeSize = 0x15100000; // 305 mb
 
 	// EE recompiler code cache area (64mb)
 	static const u32 EErecOffset   = 0x00000000;
 
 	// IOP recompiler code cache area (32mb)
-	static const u32 IOPrecOffset  = 0x04000000;
+	static const u32 IOPrecOffset  = 0x06000000;
 
 	// newVif0 recompiler code cache area (8mb)
-	static const u32 VIF0recOffset = 0x06000000;
+	static const u32 VIF0recOffset = 0x08000000;
 
 	// newVif1 recompiler code cache area (8mb)
-	static const u32 VIF1recOffset = 0x06800000;
+	static const u32 VIF1recOffset = 0x08800000;
 
 	// microVU1 recompiler code cache area (64mb)
-	static const u32 mVU0recOffset = 0x07000000;
+	static const u32 mVU0recOffset = 0x09000000;
 
 	// microVU0 recompiler code cache area (64mb)
-	static const u32 mVU1recOffset = 0x0B000000;
+	static const u32 mVU1recOffset = 0x0D000000;
 
 	// SSE-optimized VIF unpack functions (1mb)
-	static const u32 VIFUnpackRecOffset = 0x0F000000;
+	static const u32 VIFUnpackRecOffset = 0x11000000;
 
 	// Software Renderer JIT buffer (64mb)
-	static const u32 SWrecOffset = 0x0F100000;
+	static const u32 SWrecOffset = 0x11100000;
 	static const u32 SWrecSize = 0x04000000;
 }
 

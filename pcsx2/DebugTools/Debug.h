@@ -345,6 +345,7 @@ extern void __Log( const char* fmt, ... );
 #endif
 
 #define macTrace(trace)	SysTraceActive(trace) && SysTrace.trace.Write
+#define enTrace(trace) SysTrace.trace.Write
 
 #define SIF_LOG			macTrace(SIF)
 
@@ -367,7 +368,7 @@ extern void __Log( const char* fmt, ... );
 #define GifTagLog		macTrace(EE.GIFtag)
 
 
-#define PSXBIOS_LOG		macTrace(IOP.Bios)
+#define PSXBIOS_LOG		enTrace(IOP.Bios)
 #define PSXCPU_LOG		macTrace(IOP.R3000A)
 #define PSXMEM_LOG		macTrace(IOP.Memory)
 #define PSXHW_LOG		macTrace(IOP.KnownHw)

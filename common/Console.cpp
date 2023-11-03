@@ -505,7 +505,7 @@ ConsoleAttrScope::~ConsoleAttrScope()
 
 IConsoleWriter Console = _DefaultWriter_;
 IConsoleWriter DevConWriter = _DefaultWriter_;
-bool DevConWriterEnabled = false;
+bool DevConWriterEnabled = true;
 
 #ifdef PCSX2_DEBUG
 IConsoleWriter DbgConWriter = _DefaultWriter_;

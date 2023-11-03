@@ -84,19 +84,26 @@ void FLASHinit()
 	calculateECC(data);
 	ctrl = FLASH_PP_READY;
 
-	FILE* fd = fopen("flash.dat", "rb");
+	DevCon.WriteLn("DEV9: Loading xfrom flash");
+	FILE* fd = fopen("/home/darren/.config/PCSX2/inis/flash.dat", "rb");
 	if (fd != NULL)
 	{
 		const size_t ret = fread(file, 1, CARD_SIZE_ECC, fd);
 		if (ret != CARD_SIZE_ECC)
 		{
 			DevCon.WriteLn("DEV9: Reading error.");
+			memset(file, 0xFF, CARD_SIZE_ECC);
+		} else {
+			DevCon.WriteLn("DEV9: Read successful");
 		}
 
 		fclose(fd);
 	}
 	else
+	{
+		DevCon.WriteLn("DEV9: no flash.dat found, loading blank flash");
 		memset(file, 0xFF, CARD_SIZE_ECC);
+	}
 }
 
 u32 FLASHread32(u32 addr, int size)
