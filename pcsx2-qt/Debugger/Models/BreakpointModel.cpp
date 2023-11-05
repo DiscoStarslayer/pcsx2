@@ -53,27 +53,29 @@ QVariant BreakpointModel::data(const QModelIndex& index, int role) const
 		{
 			switch (index.column())
 			{
+				case BreakpointColumns::ENABLED:
+					return "";
 				case BreakpointColumns::TYPE:
 					return tr("Execute");
 				case BreakpointColumns::OFFSET:
 					return QtUtils::FilledQStringFromValue(bp->addr, 16);
 				case BreakpointColumns::SIZE_LABEL:
-					return m_cpu.GetSymbolMap().GetLabelString(bp->addr).c_str();
+					return m_cpu.GetSymbolMap().GetLabelName(bp->addr).c_str();
 				case BreakpointColumns::OPCODE:
 					// Note: Fix up the disassemblymanager so we can use it here, instead of calling a function through the disassemblyview (yuck)
 					return m_cpu.disasm(bp->addr, true).c_str();
 				case BreakpointColumns::CONDITION:
-					return bp->hasCond ? QString::fromLocal8Bit(bp->cond.expressionString) : tr("No Condition");
+					return bp->hasCond ? QString::fromLocal8Bit(bp->cond.expressionString) : "";
 				case BreakpointColumns::HITS:
 					return tr("--");
-				case BreakpointColumns::ENABLED:
-					return bp->enabled ? tr("Enabled") : tr("Disabled");
 			}
 		}
 		else if (const auto* mc = std::get_if<MemCheck>(&bp_mc))
 		{
 			switch (index.column())
 			{
+				case BreakpointColumns::ENABLED:
+					return (mc->result & MEMCHECK_BREAK) ? tr("Enabled") : tr("Disabled");
 				case BreakpointColumns::TYPE:
 				{
 					QString type("");
@@ -93,8 +95,6 @@ QVariant BreakpointModel::data(const QModelIndex& index, int role) const
 					return tr("--"); // No condition on memchecks
 				case BreakpointColumns::HITS:
 					return QString::number(mc->numHits);
-				case BreakpointColumns::ENABLED:
-					return (mc->result & MEMCHECK_BREAK) ? tr("Enabled") : tr("Disabled");
 			}
 		}
 	}
@@ -106,12 +106,14 @@ QVariant BreakpointModel::data(const QModelIndex& index, int role) const
 		{
 			switch (index.column())
 			{
+				case BreakpointColumns::ENABLED:
+					return static_cast<int>(bp->enabled);
 				case BreakpointColumns::TYPE:
 					return MEMCHECK_INVALID;
 				case BreakpointColumns::OFFSET:
 					return bp->addr;
 				case BreakpointColumns::SIZE_LABEL:
-					return m_cpu.GetSymbolMap().GetLabelString(bp->addr).c_str();
+					return m_cpu.GetSymbolMap().GetLabelName(bp->addr).c_str();
 				case BreakpointColumns::OPCODE:
 					// Note: Fix up the disassemblymanager so we can use it here, instead of calling a function through the disassemblyview (yuck)
 					return m_cpu.disasm(bp->addr, true).c_str();
@@ -119,14 +121,14 @@ QVariant BreakpointModel::data(const QModelIndex& index, int role) const
 					return bp->hasCond ? QString::fromLocal8Bit(bp->cond.expressionString) : tr("");
 				case BreakpointColumns::HITS:
 					return 0;
-				case BreakpointColumns::ENABLED:
-					return static_cast<int>(bp->enabled);
 			}
 		}
 		else if (const auto* mc = std::get_if<MemCheck>(&bp_mc))
 		{
 			switch (index.column())
 			{
+				case BreakpointColumns::ENABLED:
+					return (mc->result & MEMCHECK_BREAK);
 				case BreakpointColumns::TYPE:
 					return mc->cond;
 				case BreakpointColumns::OFFSET:
@@ -139,8 +141,6 @@ QVariant BreakpointModel::data(const QModelIndex& index, int role) const
 					return "";
 				case BreakpointColumns::HITS:
 					return mc->numHits;
-				case BreakpointColumns::ENABLED:
-					return (mc->result & MEMCHECK_BREAK);
 			}
 		}
 	}
@@ -152,12 +152,14 @@ QVariant BreakpointModel::data(const QModelIndex& index, int role) const
 		{
 			switch (index.column())
 			{
+				case BreakpointColumns::ENABLED:
+					return static_cast<int>(bp->enabled);
 				case BreakpointColumns::TYPE:
 					return MEMCHECK_INVALID;
 				case BreakpointColumns::OFFSET:
 					return QtUtils::FilledQStringFromValue(bp->addr, 16);
 				case BreakpointColumns::SIZE_LABEL:
-					return m_cpu.GetSymbolMap().GetLabelString(bp->addr).c_str();
+					return m_cpu.GetSymbolMap().GetLabelName(bp->addr).c_str();
 				case BreakpointColumns::OPCODE:
 					// Note: Fix up the disassemblymanager so we can use it here, instead of calling a function through the disassemblyview (yuck)
 					return m_cpu.disasm(bp->addr, true).c_str();
@@ -165,8 +167,6 @@ QVariant BreakpointModel::data(const QModelIndex& index, int role) const
 					return bp->hasCond ? QString::fromLocal8Bit(bp->cond.expressionString) : tr("");
 				case BreakpointColumns::HITS:
 					return 0;
-				case BreakpointColumns::ENABLED:
-					return static_cast<int>(bp->enabled);
 			}
 		}
 		else if (const auto* mc = std::get_if<MemCheck>(&bp_mc))
@@ -192,7 +192,7 @@ QVariant BreakpointModel::data(const QModelIndex& index, int role) const
 	}
 	else if (role == Qt::CheckStateRole)
 	{
-		if (index.column() == 6)
+		if (index.column() == 0)
 		{
 			auto bp_mc = m_breakpoints.at(index.row());
 
@@ -235,7 +235,7 @@ QVariant BreakpointModel::headerData(int section, Qt::Orientation orientation, i
 				return tr("HITS");
 			case BreakpointColumns::ENABLED:
 				//: Warning: limited space available. Abbreviate if needed.
-				return tr("ENABLED");
+				return tr("X");
 			default:
 				return QVariant();
 		}

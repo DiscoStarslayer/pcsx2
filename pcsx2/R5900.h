@@ -220,6 +220,7 @@ alignas(16) extern tlbs tlb[48];
 
 extern bool eeEventTestIsActive;
 
+void intUpdateCPUCycles();
 void intSetBranch();
 
 // This is a special form of the interpreter's doBranch that is run from various

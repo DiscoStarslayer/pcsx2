@@ -219,7 +219,6 @@ void DisassemblyWidget::contextAddFunction()
 			newSize = prevSize - newSize;
 			m_cpu->GetSymbolMap().AddFunction(funcName.toLocal8Bit().constData(), curAddress, newSize);
 			m_cpu->GetSymbolMap().SortSymbols();
-			m_cpu->GetSymbolMap().UpdateActiveSymbols();
 		}
 	}
 	else
@@ -232,7 +231,6 @@ void DisassemblyWidget::contextAddFunction()
 
 		m_cpu->GetSymbolMap().AddFunction(funcName.toLocal8Bit().constData(), m_selectedAddressStart, m_selectedAddressEnd + 4 - m_selectedAddressStart);
 		m_cpu->GetSymbolMap().SortSymbols();
-		m_cpu->GetSymbolMap().UpdateActiveSymbols();
 	}
 }
 
@@ -250,9 +248,8 @@ void DisassemblyWidget::contextRemoveFunction()
 			m_cpu->GetSymbolMap().SetFunctionSize(previousFuncAddr, expandedSize);
 		}
 
-		m_cpu->GetSymbolMap().RemoveFunction(curFuncAddr, true);
+		m_cpu->GetSymbolMap().RemoveFunction(curFuncAddr);
 		m_cpu->GetSymbolMap().SortSymbols();
-		m_cpu->GetSymbolMap().UpdateActiveSymbols();
 	}
 }
 
@@ -262,7 +259,7 @@ void DisassemblyWidget::contextRenameFunction()
 	if (curFuncAddress != SymbolMap::INVALID_ADDRESS)
 	{
 		bool ok;
-		QString funcName = QInputDialog::getText(this, tr("Rename Function"), tr("Function name"), QLineEdit::Normal, m_cpu->GetSymbolMap().GetLabelString(curFuncAddress).c_str(), &ok);
+		QString funcName = QInputDialog::getText(this, tr("Rename Function"), tr("Function name"), QLineEdit::Normal, m_cpu->GetSymbolMap().GetLabelName(curFuncAddress).c_str(), &ok);
 		if (!ok)
 			return;
 
@@ -274,7 +271,6 @@ void DisassemblyWidget::contextRenameFunction()
 		{
 			m_cpu->GetSymbolMap().SetLabelName(funcName.toLocal8Bit().constData(), curFuncAddress);
 			m_cpu->GetSymbolMap().SortSymbols();
-			m_cpu->GetSymbolMap().UpdateActiveSymbols();
 			this->repaint();
 		}
 	}
@@ -296,9 +292,14 @@ void DisassemblyWidget::contextStubFunction()
 			QtHost::RunOnUIThread([this] { VMUpdate(); });
 		});
 	}
-	else
+	else // Stub the current opcode instead
 	{
-		QMessageBox::warning(this, tr("Stub Function Error"), tr("No function / symbol is currently selected."));
+		Host::RunOnCPUThread([this, cpu = m_cpu] {
+			this->m_stubbedFunctions.insert({m_selectedAddressStart, {cpu->read32(m_selectedAddressStart), cpu->read32(m_selectedAddressStart + 4)}});
+			cpu->write32(m_selectedAddressStart, 0x03E00008); // jr $ra
+			cpu->write32(m_selectedAddressStart + 4, 0x00000000); // nop
+			QtHost::RunOnUIThread([this] { VMUpdate(); });
+		});
 	}
 }
 
@@ -314,9 +315,18 @@ void DisassemblyWidget::contextRestoreFunction()
 			QtHost::RunOnUIThread([this] { VMUpdate(); });
 		});
 	}
+	else if (m_stubbedFunctions.find(m_selectedAddressStart) != m_stubbedFunctions.end())
+	{
+		Host::RunOnCPUThread([this, cpu = m_cpu] {
+			cpu->write32(m_selectedAddressStart, std::get<0>(this->m_stubbedFunctions[m_selectedAddressStart]));
+			cpu->write32(m_selectedAddressStart + 4, std::get<1>(this->m_stubbedFunctions[m_selectedAddressStart]));
+			this->m_stubbedFunctions.erase(m_selectedAddressStart);
+			QtHost::RunOnUIThread([this] { VMUpdate(); });
+		});
+	}
 	else
 	{
-		QMessageBox::warning(this, tr("Restore Function Error"), tr("No function / symbol is currently selected."));
+		QMessageBox::warning(this, tr("Restore Function Error"), tr("Unable to stub selected address."));
 	}
 }
 void DisassemblyWidget::SetCpu(DebugInterface* cpu)
@@ -713,7 +723,7 @@ inline QString DisassemblyWidget::DisassemblyStringFromAddress(u32 address, QFon
 	const bool isConditionalMet = line.info.conditionMet;
 	const bool isCurrentPC = m_cpu->getPC() == address;
 
-	const std::string addressSymbol = m_cpu->GetSymbolMap().GetLabelString(address);
+	const std::string addressSymbol = m_cpu->GetSymbolMap().GetLabelName(address);
 
 	const auto demangler = demangler::CDemangler::createGcc();
 
@@ -848,6 +858,13 @@ bool DisassemblyWidget::FunctionCanRestore(u32 address)
 	if (funcStartAddress != SymbolMap::INVALID_ADDRESS)
 	{
 		if (m_stubbedFunctions.find(funcStartAddress) != this->m_stubbedFunctions.end())
+		{
+			return true;
+		}
+	}
+	else
+	{
+		if (m_stubbedFunctions.find(address) != this->m_stubbedFunctions.end())
 		{
 			return true;
 		}
