@@ -277,7 +277,7 @@ void MTGS::PostVsyncStart(bool registers_written)
 	s_VsyncSignalListener.store(true, std::memory_order_release);
 	//Console.WriteLn( Color_Blue, "(EEcore Sleep) Vsync\t\tringpos=0x%06x, writepos=0x%06x", m_ReadPos.load(), m_WritePos.load() );
 
-	// s_sem_Vsync.Wait();
+	 s_sem_Vsync.Wait();
 }
 
 void MTGS::InitAndReadFIFO(u8* mem, u32 qwc)

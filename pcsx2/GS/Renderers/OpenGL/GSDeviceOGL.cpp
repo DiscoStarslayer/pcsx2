@@ -678,12 +678,12 @@ bool GSDeviceOGL::CheckFeatures(bool& buggy_pbo)
 		return false;
 	}
 
-	// if (!GLAD_GL_VERSION_4_3 && !GLAD_GL_ARB_copy_image && !GLAD_GL_EXT_copy_image)
-	// {
-	// 	Host::ReportFormattedErrorAsync(
-	// 		"GS", "GL_ARB_copy_image is not supported, this is required for the OpenGL renderer.");
-	// 	return false;
-	// }
+	 if (!GLAD_GL_VERSION_4_3 && !GLAD_GL_ARB_copy_image && !GLAD_GL_EXT_copy_image)
+	 {
+	 	Host::ReportFormattedErrorAsync(
+	 		"GS", "GL_ARB_copy_image is not supported, this is required for the OpenGL renderer.");
+	 	return false;
+	 }
 
 	if (!GLAD_GL_ARB_viewport_array)
 	{
