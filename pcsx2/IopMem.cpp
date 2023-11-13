@@ -66,10 +66,10 @@ void iopMemReset()
 	// at 0x0, 0x8000, and 0xa000:
 	for (int i=0; i<0x0080; i++)
 	{
-		psxMemWLUT[i + 0x0000] = (uptr)&iopMem->Main[(i & 0x1f) << 16];
+		psxMemWLUT[i + 0x0000] = (uptr)&iopMem->Main[(i & 0x7f) << 16];
 
 		// RLUTs, accessed through WLUT.
-		psxMemWLUT[i + 0x8000] = (uptr)&iopMem->Main[(i & 0x1f) << 16];
+		psxMemWLUT[i + 0x8000] = (uptr)&iopMem->Main[(i & 0x7f) << 16];
 	}
 
 	// A few single-page allocations for things we store in special locations.

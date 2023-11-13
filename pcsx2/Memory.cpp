@@ -146,7 +146,7 @@ void memMapPhy()
 	// Main memory
 	vtlb_MapBlock(eeMem->Main,	0x00000000,Ps2MemSize::MainRam);//mirrored on first 256 mb ?
 	// High memory, uninstalled on the configuration we emulate
-	vtlb_MapBlock(eeMem->ExtraMemory, Ps2MemSize::ExtraRam, Ps2MemSize::ExtraRam);
+	vtlb_MapBlock(eeMem->ExtraMemory, 0x2000000, Ps2MemSize::ExtraRam);
 
 	// Various ROMs (all read-only)
 	vtlb_MapBlock(eeMem->ROM,	0x1fc00000, Ps2MemSize::Rom);
