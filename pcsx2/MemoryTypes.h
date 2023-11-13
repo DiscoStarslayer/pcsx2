@@ -18,15 +18,15 @@
 
 namespace Ps2MemSize
 {
-	static constexpr u32 MainRam = _64mb;      // 32 MB main memory.
-	static constexpr u32 ExtraRam = _1mb * 96; // 32+96 MB devkit memory.
+	static constexpr u32 MainRam = _32mb;      // 32 MB main memory.
+	static constexpr u32 ExtraRam = _32mb;     // 32+32 MB psx memory.
 	static constexpr u32 Rom = _1mb * 4;       // 4 MB main rom
 	static constexpr u32 Rom1 = _1mb * 4;      // DVD player
 	static constexpr u32 Rom2 = 0x00080000;    // Chinese rom extension
 	static constexpr u32 Hardware = _64kb;
 	static constexpr u32 Scratch = _16kb;
 
-	static constexpr u32 IopRam = _1mb * 8;	   // 8MB main ram on the IOP.
+	static constexpr u32 IopRam = _1mb * 8;	   // 8MB main ram on the PSX IOP.
 	static constexpr u32 IopHardware = _64kb;
 
 	static const uint GSregs = 0x00002000;			// 8k for the GS registers and stuff.
@@ -58,7 +58,7 @@ struct EEVM_MemoryAllocMess
 
 struct IopVM_MemoryAllocMess
 {
-	u8 Main[Ps2MemSize::IopRam]; // Main memory (hard-wired to 2MB)
+	u8 Main[Ps2MemSize::IopRam]; // Main memory (hard-wired to 8MB)
 	u8 P[_64kb];                 // I really have no idea what this is... --air
 	u8 Sif[0x100];               // a few special SIF/SBUS registers (likely not needed)
 };
