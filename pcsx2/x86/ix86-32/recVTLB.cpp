@@ -28,7 +28,7 @@ using namespace x86Emitter;
 // we need enough for a 32-bit jump forwards (5 bytes)
 static constexpr u32 LOADSTORE_PADDING = 5;
 
-//#define LOG_STORES
+#define LOG_STORES
 
 static u32 GetAllocatedGPRBitmask()
 {
@@ -107,7 +107,7 @@ static std::FILE* logfile;
 static bool CheckLogFile()
 {
 	if (!logfile)
-		logfile = std::fopen("C:\\Dumps\\comp\\memlog.bad.txt", "wb");
+		logfile = std::fopen("/home/darren/.config/PCSX2/logs/memlogbad.txt", "wb");
 	return (logfile != nullptr);
 }
 
@@ -116,7 +116,7 @@ static void LogWrite(u32 addr, u64 val)
 	if (!CheckLogFile())
 		return;
 
-	std::fprintf(logfile, "%08X @ %u: %llx\n", addr, cpuRegs.cycle, val);
+	std::fprintf(logfile, "%08X @ %u: %lx\n", addr, cpuRegs.cycle, val);
 	std::fflush(logfile);
 }
 
@@ -125,7 +125,7 @@ static void __vectorcall LogWriteQuad(u32 addr, __m128i val)
 	if (!CheckLogFile())
 		return;
 
-	std::fprintf(logfile, "%08X @ %u: %llx %llx\n", addr, cpuRegs.cycle, val.m128i_u64[0], val.m128i_u64[1]);
+	std::fprintf(logfile, "%08X @ %u: %llx\n", addr, cpuRegs.cycle, val);
 	std::fflush(logfile);
 }
 #endif

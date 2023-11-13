@@ -127,6 +127,7 @@ struct psxRegisters {
 	s32 eCycle[32];		// cycle delta for signaled ints (sCycle + eCycle == branch cycle)
 	//u32 _msflag[32];
 	//u32 _smflag[32];
+	u32 prevPc;
 };
 
 alignas(16) extern psxRegisters psxRegs;

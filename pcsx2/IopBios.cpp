@@ -916,8 +916,8 @@ namespace R3000A
 			// printf-style formatting processing.  This part can be skipped if the user has the
 			// console disabled.
 
-			if (!SysConsole.iopConsole.IsActive())
-				return 1;
+//			if (!SysConsole.iopConsole.IsActive())
+//				return 1;
 
 			char tmp[1024], tmp2[1024];
 			char* ptmp = tmp;
@@ -1015,6 +1015,16 @@ namespace R3000A
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
+		}
+
+		void QueryBlockTopAddress_DEBUG()
+		{
+			DevCon.WriteLn(Color_Gray, "QueryBlockTopAddress address: %x", a0);
+		}
+
+		void QueryBlockSize_DEBUG()
+		{
+			DevCon.WriteLn(Color_Gray, "QueryBlockSize address: %x", a0);
 		}
 	} // namespace sysmem
 
@@ -1292,6 +1302,11 @@ namespace R3000A
 		END_MODULE
 		MODULE(sifcmd)
 			EXPORT_D( 17, sceSifRegisterRpc)
+		END_MODULE
+
+		MODULE(sysmem)
+			EXPORT_D( 9, QueryBlockTopAddress)
+			EXPORT_D( 10, QueryBlockSize)
 		END_MODULE
 		// clang-format off
 

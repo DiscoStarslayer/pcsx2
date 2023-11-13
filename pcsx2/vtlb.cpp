@@ -47,7 +47,7 @@
 #include <unordered_map>
 
 #define FASTMEM_LOG(...)
-//#define FASTMEM_LOG(...) Console.WriteLn(__VA_ARGS__)
+// #define FASTMEM_LOG(...) Console.WriteLn(__VA_ARGS__)
 
 using namespace R5900;
 using namespace vtlb_private;

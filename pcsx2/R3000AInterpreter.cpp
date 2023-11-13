@@ -226,10 +226,26 @@ static __fi void execI()
 		}
 	}
 
+	if (psxRegs.pc == 0x00002b3c && psxRegs.GPR.n.a2 == 0x0000400d) {
+		PSXCPU_LOG("EVIL FUNCTION, from %x, to %x, val %x",  psxRegs.GPR.n.a0,  psxRegs.GPR.n.a1, psxRegs.GPR.n.a2);
+	}
+
+	if (psxRegs.pc == 0x1b30) {
+		PSXCPU_LOG("CHECKING BLOCK addr: %x", psxRegs.GPR.n.s1 + psxRegs.GPR.n.r0);
+	}
+
+	if (psxRegs.pc == 0x1b3c) {
+		PSXCPU_LOG("CHECKING BLOCK addr: %x result: %x", psxRegs.GPR.n.a0, psxRegs.GPR.n.v0);
+	}
+
 	psxRegs.code = iopMemRead32(psxRegs.pc);
 
-		PSXCPU_LOG("%s", disR3000AF(psxRegs.code, psxRegs.pc));
+	if (psxRegs.code == 0x0000400d) {
+		PSXCPU_LOG("BREAK ENCOUNTERED");
+	}
 
+		PSXCPU_LOG("%s", disR3000AF(psxRegs.code, psxRegs.pc));
+	psxRegs.prevPc = psxRegs.pc;
 	psxRegs.pc+= 4;
 	psxRegs.cycle++;
 
