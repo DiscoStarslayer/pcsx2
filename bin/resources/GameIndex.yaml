@@ -2325,6 +2325,8 @@ SCED-50633:
 SCED-50642:
   name: "Final Fantasy X [Demo] [Final Fantasy VI PS1 - Bonus Disc]"
   region: "PAL-E"
+  gameFixes:
+    - SoftwareRendererFMVHack # Fixes interlacing.
   roundModes:
     eeRoundMode: 1 # Fixes reverse control and boss in some places.
   clampModes:
@@ -2449,6 +2451,8 @@ SCED-50844:
 SCED-50907:
   name: "Final Fantasy X [Bonus Disc - Beyond Final Fantasy]"
   region: "PAL-Unk"
+  gameFixes:
+    - SoftwareRendererFMVHack # Fixes interlacing.
   roundModes:
     eeRoundMode: 1 # Fixes reverse control and boss in some places.
   clampModes:
@@ -4115,6 +4119,8 @@ SCES-50490:
   name: "Final Fantasy X"
   region: "PAL-E"
   compat: 5
+  gameFixes:
+    - SoftwareRendererFMVHack # Fixes interlacing.
   roundModes:
     eeRoundMode: 1 # Fixes reverse control and boss in some places.
   clampModes:
@@ -4124,6 +4130,8 @@ SCES-50490:
 SCES-50491:
   name: "Final Fantasy X"
   region: "PAL-F"
+  gameFixes:
+    - SoftwareRendererFMVHack # Fixes interlacing.
   roundModes:
     eeRoundMode: 1 # Fixes reverse control and boss in some places.
   clampModes:
@@ -4134,6 +4142,8 @@ SCES-50492:
   name: "Final Fantasy X"
   region: "PAL-G"
   compat: 5
+  gameFixes:
+    - SoftwareRendererFMVHack # Fixes interlacing.
   roundModes:
     eeRoundMode: 1 # Fixes reverse control and boss in some places.
   clampModes:
@@ -4143,6 +4153,8 @@ SCES-50492:
 SCES-50493:
   name: "Final Fantasy X"
   region: "PAL-I"
+  gameFixes:
+    - SoftwareRendererFMVHack # Fixes interlacing.
   roundModes:
     eeRoundMode: 1 # Fixes reverse control and boss in some places.
   clampModes:
@@ -4152,6 +4164,8 @@ SCES-50493:
 SCES-50494:
   name: "Final Fantasy X"
   region: "PAL-S"
+  gameFixes:
+    - SoftwareRendererFMVHack # Fixes interlacing.
   roundModes:
     eeRoundMode: 1 # Fixes reverse control and boss in some places.
   clampModes:
@@ -11958,6 +11972,8 @@ SLED-52890:
   region: "PAL-M7"
   gameFixes:
     - GIFFIFOHack # Partially fixes graphical issues also needs EE cycle rate + 3.
+  speedHacks:
+    eeCycleRate: 3 # Fixes player uniforms.
 SLED-52891:
   name: "Rocky Legends"
   region: "PAL-Unk"
@@ -12118,6 +12134,9 @@ SLED-53719:
 SLED-53723:
   name: "Peter Jackson's King Kong [Demo]"
   region: "PAL-E"
+  gsHWFixes:
+    recommendedBlendingLevel: 2 # Increases image brightness.
+    autoFlush: 1 # Corrects vignette to match software.
 SLED-53731:
   name: "Battlefield 2 - Modern Combat [Demo]"
   region: "PAL-E"
@@ -18168,26 +18187,36 @@ SLES-52559:
   region: "PAL-E"
   gameFixes:
     - GIFFIFOHack # Partially fixes graphical issues also needs EE cycle rate + 3.
+  speedHacks:
+    eeCycleRate: 3 # Fixes player uniforms.
 SLES-52560:
   name: "FIFA 2005"
   region: "PAL-G"
   gameFixes:
     - GIFFIFOHack # Partially fixes graphical issues also needs EE cycle rate + 3.
+  speedHacks:
+    eeCycleRate: 3 # Fixes player uniforms.
 SLES-52561:
   name: "FIFA 2005"
   region: "PAL-P-S"
   gameFixes:
     - GIFFIFOHack # Partially fixes graphical issues also needs EE cycle rate + 3.
+  speedHacks:
+    eeCycleRate: 3 # Fixes player uniforms.
 SLES-52562:
   name: "FIFA 2005"
   region: "PAL-I"
   gameFixes:
     - GIFFIFOHack # Partially fixes graphical issues also needs EE cycle rate + 3.
+  speedHacks:
+    eeCycleRate: 3 # Fixes player uniforms.
 SLES-52563:
   name: "FIFA Football 2005"
   region: "PAL-M6"
   gameFixes:
     - GIFFIFOHack # Partially fixes graphical issues also needs EE cycle rate + 3.
+  speedHacks:
+    eeCycleRate: 3 # Fixes player uniforms.
 SLES-52567:
   name: "Catwoman"
   region: "PAL-M7"
@@ -21500,12 +21529,21 @@ SLES-53703:
   name: "King Kong, Peter Jackson's - The Official Game of the Movie"
   region: "PAL-M10"
   compat: 5
+  gsHWFixes:
+    recommendedBlendingLevel: 2 # Increases image brightness.
+    autoFlush: 1 # Corrects vignette to match software.
 SLES-53704:
   name: "King Kong, Peter Jackson's - The Official Game of the Movie"
   region: "PAL-R"
+  gsHWFixes:
+    recommendedBlendingLevel: 2 # Increases image brightness.
+    autoFlush: 1 # Corrects vignette to match software.
 SLES-53705:
   name: "King Kong, Peter Jackson's - The Official Game of the Movie"
   region: "PAL-PL-E"
+  gsHWFixes:
+    recommendedBlendingLevel: 2 # Increases image brightness.
+    autoFlush: 1 # Corrects vignette to match software.
 SLES-53706:
   name: "The Chronicles of Narnia - The Lion Witch and The Wardrobe"
   name-sort: "Chronicles of Narnia, The - The Lion, The Witch and The Wardrobe"
@@ -27850,6 +27888,8 @@ SLKA-25209:
   region: "NTSC-K"
   gameFixes:
     - GIFFIFOHack # Partially fixes graphical issues also needs EE cycle rate + 3.
+  speedHacks:
+    eeCycleRate: 3 # Fixes player uniforms.
   gsHWFixes:
     mipmap: 1
 SLKA-25210:
@@ -28369,6 +28409,9 @@ SLKA-25335:
 SLKA-25337:
   name: "Peter Jackson's King Kong - The Official Game of the Movie"
   region: "NTSC-K"
+  gsHWFixes:
+    recommendedBlendingLevel: 2 # Increases image brightness.
+    autoFlush: 1 # Corrects vignette to match software.
 SLKA-25338:
   name: "The Godfather"
   name-sort: "Godfather, The"
@@ -29359,10 +29402,14 @@ SLPM-55145:
   name: "Akudaikan 3"
   region: "NTSC-J"
 SLPM-55146:
-  name: "Jikkyou Powerful Pro Yakyuu 2009"
+  name: 実況パワフルプロ野球2009
+  name-sort: じっきょうぱわふるぷろやきゅう2009
+  name-en: "Jikkyou Powerful Pro Yakyuu 2009"
   region: "NTSC-J"
 SLPM-55147:
-  name: "Suggoi! Arcana Heart 2"
+  name: すっごい! アルカナハート2
+  name-sort: すっごい! あるかなはーと2
+  name-en: "Suggoi! Arcana Heart 2"
   region: "NTSC-J"
 SLPM-55148:
   name: 007 / 慰めの報酬
@@ -29650,7 +29697,9 @@ SLPM-55244:
     halfPixelOffset: 2 # Fixes blurriness.
     getSkipCount: "GSC_NFSUndercover"
 SLPM-55245:
-  name: "Himawari - Pebble in the Sky"
+  name: ひまわり -Pebble in the Sky-
+  name-sort: ひまわり -Pebble in the Sky-
+  name-en: "Himawari - Pebble in the Sky"
   region: "NTSC-J"
 SLPM-55246:
   name: "Wand of Fortune - Mirai e no Prologue"
@@ -33554,6 +33603,11 @@ SLPM-62589:
   name-sort: SIMPLE2000しりーず Vol.72 THE にんきょう
   name-en: "Simple 2000 Series Vol. 72 - Ninhaza"
   region: "NTSC-J"
+SLPM-62590:
+  name: ジーワンジョッキー3 2005年度版 プレミアムパック
+  name-sort: じーわんじょっきー3 2005ねんどばん ぷれみあむぱっく
+  name-en: "G1 Jockey 3 - 2005 [Premium Pack]"
+  region: "NTSC-J"
 SLPM-62591:
   name: ジーワンジョッキー3 2005年度版
   name-sort: じーわんじょっきー3 2005ねんどばん
@@ -35937,8 +35991,12 @@ SLPM-65257:
     - "SLPM-65341"
     - "SLPM-65631"
 SLPM-65259:
-  name: "Shin Megami Tensei III - Nocturne"
+  name: 真・女神転生 III-NOCTURNE TSUTAYAオリジナルバージョン
+  name-sort: しん・めがみてんせい III-NOCTURNE TSUTAYAおりじなるばーじょん
+  name-en: "Shin Megami Tensei III - Nocturne TSUTAYA Original Version"
   region: "NTSC-J"
+  roundModes:
+    eeRoundMode: 0 # Ladder glitch in "Assembly of Nihilo B11" level.
 SLPM-65260:
   name: 凱歌の号砲
   name-sort: がいかのごうほう
@@ -37331,7 +37389,9 @@ SLPM-65521:
   name-en: "Tentama 2 Wins"
   region: "NTSC-J"
 SLPM-65522:
-  name: "Bakushou!! Jinsei Kaidou - Nova Usagi ga Miteru zo!!"
+  name: 爆笑!! 人生回道 NOVAうさぎが見てるぞ!!
+  name-sort: ばくしょう!! じんせいかいどう NOVAうさぎがみているぞ!!
+  name-en: "Bakushou!! Jinsei Kaidou - Nova Usagi ga Miteru zo!!"
   region: "NTSC-J"
 SLPM-65523:
   name: ふらせら Hurrah!Sailor 通常版
@@ -37807,7 +37867,9 @@ SLPM-65617:
   name-en: "Bouken Jidai Katsugeki Goemon [Konami Collection]"
   region: "NTSC-J"
 SLPM-65618:
-  name: "Vampire Panic"
+  name: ベルセルク 体験版
+  name-sort: べるせるく たいけんばん
+  name-en: "Berserk [Trial]"
   region: "NTSC-J"
 SLPM-65619:
   name: トム・クランシーシリーズ ゴーストリコン ジャングルストーム
@@ -39323,6 +39385,11 @@ SLPM-65892:
   name-sort: Zill O’ll 〜infinite〜
   name-en: "Zill O'll Infinite"
   region: "NTSC-J"
+SLPM-65893:
+  name: Winning Post 6 Maximum 2005 プレミアムパック
+  name-sort: Winning Post 6 Maximum 2005 ぷれみあむぱっく
+  name-en: "Winning Post 6 Maximum 2005 [Premium Pack]"
+  region: "NTSC-J"
 SLPM-65894:
   name: WinningPost6 2005年度版
   name-sort: WinningPost6 2005ねんどばん
@@ -40642,6 +40709,8 @@ SLPM-66124:
   name-sort: ふぁいなるふぁんたじーX [あるてぃめっとひっつ]
   name-en: "Final Fantasy X [Ultimate Hits]"
   region: "NTSC-J"
+  gameFixes:
+    - SoftwareRendererFMVHack # Fixes interlacing.
   roundModes:
     eeRoundMode: 1 # Fixes reverse control and boss in some places.
   clampModes:
@@ -41157,6 +41226,9 @@ SLPM-66211:
   name-sort: PETER JACKSON’S きんぐ・こんぐ おふぃしゃる げーむ おぶ ざ むーびー
   name-en: "King Kong, Peter Jackson's - The Official Game of the Movie"
   region: "NTSC-J"
+  gsHWFixes:
+    recommendedBlendingLevel: 2 # Increases image brightness.
+    autoFlush: 1 # Corrects vignette to match software.
 SLPM-66212:
   name: セガラリー2006
   name-sort: せがらりー2006
@@ -43948,7 +44020,9 @@ SLPM-66679:
     - "SLPM-66246"
     - "SLPM-66634"
 SLPM-66681:
-  name: "Shin Megami Tensei - Nocturne Maniax"
+  name: 真・女神転生III-NOCTURNE マニアクス クロニクルエディション
+  name-sort: しん・めがみてんせいIII-NOCTURNE まにあくす くろにくるえでぃしょん
+  name-en: "Shin Megami Tensei III - Nocturne Maniax Chronicle Edition"
   region: "NTSC-J"
   compat: 5
   roundModes:
@@ -47259,6 +47333,11 @@ SLPS-20108:
   region: "NTSC-J"
   gsHWFixes:
     mipmap: 1
+SLPS-20109:
+  name: スターウォーズ　スターファイター
+  name-sort: すたーうぉーず すたーふぁいたー
+  name-en: "Starwars Star Fighter"
+  region: "NTSC-J"
 SLPS-20110:
   name: "Mezase! Meimon Yakyuubu 2"
   region: "NTSC-J"
@@ -47723,6 +47802,11 @@ SLPS-20239:
   region: "NTSC-J"
 SLPS-20240:
   name: "Jissen Pachi-Slot Hisshouhou! Moujuuou S"
+  region: "NTSC-J"
+SLPS-20241:
+  name: 上海 三国牌闘儀
+  name-sort: しゃんはい さんごく はいとうぎ
+  name-en: "Shanghai Sangoku Hai Tougi"
   region: "NTSC-J"
 SLPS-20242:
   name: "Tomak - Save the Earth - Love Story"
@@ -48998,7 +49082,7 @@ SLPS-25011:
   region: "NTSC-J"
 SLPS-25012:
   name: はじめの一歩 VICTORIOUS BOXERS
-  name-sort: はじめのいちほ VICTORIOUS BOXERS
+  name-sort: はじめのいっぽ VICTORIOUS BOXERS
   name-en: "Victorious Boxers"
   region: "NTSC-J"
 SLPS-25013:
@@ -49238,8 +49322,12 @@ SLPS-25050:
   name-en: "Final Fantasy X"
   region: "NTSC-J"
   compat: 5
+  gameFixes:
+    - SoftwareRendererFMVHack # Fixes interlacing.
   roundModes:
     eeRoundMode: 1 # Fixes reverse control and boss in some places.
+  clampModes:
+    eeClampMode: 3 # Fixes animations.
   gsHWFixes:
     roundSprite: 2 # Fixes font artifacts.
 SLPS-25051:
@@ -49533,7 +49621,9 @@ SLPS-25105:
   name-en: "Kingdom Hearts"
   region: "NTSC-J"
 SLPS-25106:
-  name: "America Oudan Ultra Quiz"
+  name: アメリカ横断ウルトラクイズ
+  name-sort: あめりかおうだんうるとらくいず
+  name-en: "America Oudan Ultra Quiz"
   region: "NTSC-J"
 SLPS-25107:
   name: 剣豪2
@@ -49664,7 +49754,9 @@ SLPS-25128:
   name: "Victorious Boxer - Championship Version"
   region: "NTSC-J"
 SLPS-25129:
-  name: "Victorious Boxer - Championship Version"
+  name: はじめの一歩 VICTORIOUS BOXERS 〜CHAMPIONSHIP VERSION〜 PS2 the Best
+  name-sort: はじめのいっぽ VICTORIOUS BOXERS 〜CHAMPIONSHIP VERSION〜 PS2 the Best
+  name-en: "Victorious Boxers - Championship Edition [PS2 The Best]"
   region: "NTSC-J"
 SLPS-25130:
   name: ルームメイト・麻美-おくさまは女子高生-
@@ -50462,7 +50554,7 @@ SLPS-25283:
   region: "NTSC-J"
 SLPS-25287:
   name: はじめの一歩2 VICTORIOUS ROAD
-  name-sort: はじめのいちほ2 VICTORIOUS ROAD
+  name-sort: はじめのいっぽ2 VICTORIOUS ROAD
   name-en: "Victorious Boxers 2 - Ippo's Road to Glory"
   region: "NTSC-J"
 SLPS-25288:
@@ -50676,7 +50768,9 @@ SLPS-25326:
   name-en: "WWE Smackdown! Here Comes the Pain - Exciting Pro Wrestling 5 [Limited Edition]"
   region: "NTSC-J"
 SLPS-25327:
-  name: "Exciting Pro Wres 5"
+  name: エキサイティングプロレス5
+  name-sort: えきさいてぃんぐぷろれす5
+  name-en: "WWE Smackdown! Here Comes the Pain - Exciting Pro Wrestling 5"
   region: "NTSC-J"
 SLPS-25329:
   name: 九怨 -kuon-
@@ -51389,7 +51483,7 @@ SLPS-25438:
   region: "NTSC-J"
 SLPS-25439:
   name: はじめの一歩 ALL☆STARS(オール☆スターズ)
-  name-sort: はじめのいちほ おーる☆すたーず
+  name-sort: はじめのいっぽ おーる☆すたーず
   name-en: "Hajime no Ippo - All-Stars"
   region: "NTSC-J"
 SLPS-25440:
@@ -51458,7 +51552,7 @@ SLPS-25453:
 SLPS-25454:
   name: 義経英雄伝
   name-sort: よしつねえいゆうでん
-  name-en: "Daisenryaku VII Exceed"
+  name-en: "Yoshitsune Eiyuuden"
   region: "NTSC-J"
 SLPS-25455:
   name: 三洋パチンコパラダイス11〜新海とさらば銀玉の狼〜
@@ -52893,6 +52987,11 @@ SLPS-25704:
   name-sort: さもんないと4
   name-en: "Summon Night 4"
   region: "NTSC-J"
+SLPS-25705:
+  name: エウレカセブン New Wave Graduation
+  name-sort: えうれかせぶん New Wave Graduation
+  name-en: "Eureka Seven - New Wave Graduation"
+  region: "NTSC-J"
 SLPS-25706:
   name: "Eureka Seven - New Vision"
   region: "NTSC-J"
@@ -53913,6 +54012,11 @@ SLPS-25894:
   name-sort: ああっめがみさまっ Best Collection
   name-en: "Aa Megami-sama [PS2 The Best]"
   region: "NTSC-J"
+SLPS-25896:
+  name: 萌え萌え2次大戦（略）☆デラックス
+  name-sort: もえもえにじたいせん（りゃく）☆でらっくす
+  name-en: "Moe Moe 2ji Taisen(Ryaku) Deluxe"
+  region: "NTSC-J"
 SLPS-25897:
   name: ゼロの使い魔 迷子の終止符と幾千の交響曲 限定版
   name-sort: ぜろのつかいま まいごのしゅうしふといくせんのこうきょうきょく げんていばん
@@ -54297,6 +54401,8 @@ SLPS-72501:
   name-sort: ふぁいなるふぁんたじーX MEGA HITS!
   name-en: "Final Fantasy X [Mega Hits]"
   region: "NTSC-J"
+  gameFixes:
+    - SoftwareRendererFMVHack # Fixes interlacing.
   roundModes:
     eeRoundMode: 1 # Fixes reverse control and boss in some places.
   clampModes:
@@ -54931,7 +55037,7 @@ SLPS-73270:
   region: "NTSC-J"
 SLPS-73401:
   name: はじめの一歩 VICTORIOUS BOXERS 〜CHAMPIONSHIP VERSION〜 PS2 the Best
-  name-sort: はじめのいちほ VICTORIOUS BOXERS 〜CHAMPIONSHIP VERSION〜 PS2 the Best
+  name-sort: はじめのいっぽ VICTORIOUS BOXERS 〜CHAMPIONSHIP VERSION〜 PS2 the Best
   name-en: "Victorious Boxers - Championship Edition [PS2 The Best]"
   region: "NTSC-J"
 SLPS-73402:
@@ -56401,6 +56507,8 @@ SLUS-20312:
   name: "Final Fantasy X"
   region: "NTSC-U"
   compat: 5
+  gameFixes:
+    - SoftwareRendererFMVHack # Fixes interlacing.
   roundModes:
     eeRoundMode: 1 # Fixes reverse control and boss in some places.
   clampModes:
@@ -60307,6 +60415,8 @@ SLUS-21051:
   compat: 5
   gameFixes:
     - GIFFIFOHack # Partially fixes graphical issues also needs EE cycle rate + 3.
+  speedHacks:
+    eeCycleRate: 3 # Fixes player uniforms.
 SLUS-21052:
   name: "Disney's Monsters Inc."
   region: "NTSC-U"
@@ -61782,6 +61892,9 @@ SLUS-21311:
   name: "King Kong, Peter Jackson's - The Official Game of the Movie"
   region: "NTSC-U"
   compat: 5
+  gsHWFixes:
+    recommendedBlendingLevel: 2 # Increases image brightness.
+    autoFlush: 1 # Corrects vignette to match software.
 SLUS-21312:
   name: "Wallace & Gromit - The Curse of the Were-Rabbit"
   region: "NTSC-U"
