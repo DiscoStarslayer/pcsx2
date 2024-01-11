@@ -286,8 +286,8 @@ namespace usb_python2
 			if (s->devices[1] == nullptr)
 			{
 				auto aciodev = std::make_unique<acio_device>();
-				aciodev->add_acio_device(1, std::make_unique<acio_icca_device>(s->p2dev));
-				aciodev->add_acio_device(2, std::make_unique<acio_icca_device>(s->p2dev));
+				aciodev->add_acio_device(1, std::make_unique<acio_icca_device>(s->p2dev, s->f.cardFilenames[0]));
+				aciodev->add_acio_device(2, std::make_unique<acio_icca_device>(s->p2dev, s->f.cardFilenames[0]));
 				s->devices[1] = std::move(aciodev);
 			}
 		}
