@@ -1328,7 +1328,7 @@ void cdvdReset()
 		Error error;
 		std::string path = Path::Canonicalize(EmuConfig.Security.MgEncryptedKeyStoreFile);
 		auto fp = FileSystem::OpenManagedCFileTryIgnoreCase(path.c_str(), "rb", &error);
-		if (!fp || std::fread(g_EncryptedKeyStore, 1, sizeof(g_EncryptedKeyStore), fp.get()) != 1)
+		if (!fp || std::fread(g_EncryptedKeyStore, 1, sizeof(g_EncryptedKeyStore), fp.get()) != 1024)
 		{
 			ERROR_LOG("Failed to read Encrypted Key Store file at {}: {}", path, error.GetDescription());
 		}
@@ -1339,7 +1339,7 @@ void cdvdReset()
 		Error error;
 		std::string path = Path::Canonicalize(EmuConfig.Security.MgCardKeyStoreFile);
 		auto fp = FileSystem::OpenManagedCFileTryIgnoreCase(path.c_str(), "rb", &error);
-		if (!fp || std::fread(g_cardKeyStore, 1, sizeof(g_cardKeyStore), fp.get()) != 1)
+		if (!fp || std::fread(g_cardKeyStore, 1, sizeof(g_cardKeyStore), fp.get()) != 96)
 		{
 			ERROR_LOG("Failed to read Card Key Store file at {}: {}", path, error.GetDescription());
 		}
@@ -1350,7 +1350,7 @@ void cdvdReset()
 		Error error;
 		std::string path = Path::Canonicalize(EmuConfig.Security.MgKeyStoreKeyFile);
 		auto fp = FileSystem::OpenManagedCFileTryIgnoreCase(path.c_str(), "rb", &error);
-		if (!fp || std::fread(g_KeyStoreKey, 1, sizeof(g_KeyStoreKey), fp.get()) != 1)
+		if (!fp || std::fread(g_KeyStoreKey, 1, sizeof(g_KeyStoreKey), fp.get()) != 16)
 		{
 			ERROR_LOG("Failed to read Key Store Key file at {}: {}", path, error.GetDescription());
 		}
