@@ -165,6 +165,15 @@ AdvancedSettingsWidget::AdvancedSettingsWidget(SettingsWindow* settings_dialog, 
 		tr("Automatically saves the emulator state when powering down or exiting. You can then "
 		   "resume directly from where you left off next time."));
 
+	dialog()->registerWidgetHelp(m_ui.mgChallengeIvFile, tr("MagicGate Challenge IV File"), tr("civ.bin"), nullptr);
+	dialog()->registerWidgetHelp(m_ui.mgChallengeIvFileBrowse, tr("MagicGate Challenge IV File"), tr("civ.bin"), nullptr);
+	dialog()->registerWidgetHelp(m_ui.mgCardKeyStoreFile, tr("MagicGate Card Key Store File"), tr("cks.bin"), nullptr);
+	dialog()->registerWidgetHelp(m_ui.mgCardKeyStoreBrowse, tr("MagicGate Card Key Store File"), tr("cks.bin"), nullptr);
+	dialog()->registerWidgetHelp(m_ui.mgKeyStoreKeyFile, tr("MagicGate Key Store Key File"), tr("kek.bin"), nullptr);
+	dialog()->registerWidgetHelp(m_ui.mgKeyStoreKeyBrowse, tr("MagicGate Key Store Key File"), tr("kek.bin"), nullptr);
+	dialog()->registerWidgetHelp(m_ui.mgEncryptedKeyStoreFile, tr("MagicGate Encrypted Key Store File"), tr("eks.bin"), nullptr);
+	dialog()->registerWidgetHelp(m_ui.mgEncryptedKeyStoreBrowse, tr("MagicGate Encrypted Key Store File"), tr("eks.bin"), nullptr);
+
 	dialog()->registerWidgetHelp(m_ui.backupSaveStates, tr("Create Save State Backups"), tr("Checked"),
 		//: Do not translate the ".backup" extension.
 		tr("Creates a backup copy of a save state if it already exists when the save is created. The backup copy has a .backup suffix."));
