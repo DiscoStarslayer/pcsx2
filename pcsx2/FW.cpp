@@ -3752,7 +3752,7 @@ void FWwrite32(u32 addr, u32 value)
 			//		fwRu32(FW_INTR1) |= 0x2;
 			//		FWirq();
 			//	}
-			fwRu32(addr) &= ~FW_CTRL0_BusIDRst;
+			fwRu32(addr) &= ~(FW_CTRL0_BusIDRst | FW_CTRL0_RxRst | FW_CTRL0_TxRst);
 			fwRu32(addr) |= FW_CTRL0_Root;
 			break;
 		//Control Register 2

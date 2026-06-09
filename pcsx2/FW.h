@@ -41,6 +41,8 @@ namespace FireWire
 #define FW_CTRL0         (FW_BASE + 0x008)
 #define   FW_CTRL0_Root          (1 << 19)
 #define   FW_CTRL0_BusIDRst      (1 << 23)
+#define   FW_CTRL0_RxRst         (1 << 24)
+#define   FW_CTRL0_TxRst         (1 << 25)
 #define FW_CTRL1         (FW_BASE + 0x00c)
 #define FW_CTRL2         (FW_BASE + 0x010)
 #define FW_PHY_ACCESS    (FW_BASE + 0x014)
