@@ -226,6 +226,7 @@ bool GSDevicePGS::Init()
 
 	wsi.set_platform(this);
 	frame_duplication_aware = std::getenv("PCSX2_PGS_DISABLE_FRAME_DUPLICATION_AWARE") == nullptr;
+	speculative_begin_frame = std::getenv("PCSX2_PGS_DISABLE_SPECULATIVE_BEGIN_FRAME") == nullptr;
 	wsi.set_frame_duplication_aware(frame_duplication_aware, 5);
 
 	bool ret = wsi.init_simple(1, {});
@@ -1152,7 +1153,8 @@ void GSRendererPGS::VSync(u32 field, bool registers_written, bool refresh_frame)
 	}
 
 	// For pacing purposes.
-	device.has_wsi_begin_frame = wsi.begin_frame();
+	if (device.speculative_begin_frame)
+		device.has_wsi_begin_frame = wsi.begin_frame();
 	device.has_presented_in_current_swapchain = true;
 }
 

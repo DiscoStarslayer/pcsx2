@@ -91,6 +91,7 @@ private:
 	bool has_wsi_begin_frame = false;
 	bool has_presented_in_current_swapchain = false;
 	bool frame_duplication_aware = true;
+	bool speculative_begin_frame = true;
 };
 
 class GSRendererPGS
