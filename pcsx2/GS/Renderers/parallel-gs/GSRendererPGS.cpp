@@ -21,6 +21,8 @@
 #include "common/StringUtil.h"
 #include "common/Console.h"
 
+#include <cstdlib>
+
 // Workaround because msbuild is broken when mixing C and C++ it seems ...
 #ifdef _MSC_VER
 extern "C" {
@@ -223,7 +225,8 @@ bool GSDevicePGS::Init()
 		return false;
 
 	wsi.set_platform(this);
-	wsi.set_frame_duplication_aware(true, 5);
+	frame_duplication_aware = std::getenv("PCSX2_PGS_DISABLE_FRAME_DUPLICATION_AWARE") == nullptr;
+	wsi.set_frame_duplication_aware(frame_duplication_aware, 5);
 
 	bool ret = wsi.init_simple(1, {});
 	if (!ret)
@@ -660,7 +663,7 @@ void GSRendererPGS::VSync(u32 field, bool registers_written, bool refresh_frame)
 		if (!frame_is_duped || !vsync.image || !m_snapshot.empty())
 			vsync = iface.vsync(info);
 
-		if (frame_is_duped && !GSConfig.SkipDuplicateFrames)
+		if (frame_is_duped && !GSConfig.SkipDuplicateFrames && device.frame_duplication_aware)
 			wsi.set_next_present_is_duplicated();
 
 		PerformanceMetrics::Update(registers_written, stats.num_render_passes != 0, false);
@@ -800,7 +803,7 @@ void GSRendererPGS::VSync(u32 field, bool registers_written, bool refresh_frame)
 	}
 
 	// High refresh setup requires a lot of swapchain images ...
-	if (frame_multiplier > 1)
+	if (frame_multiplier > 1 && device.frame_duplication_aware)
 		wsi.set_frame_duplication_aware(true, frame_multiplier * 3);
 
 	bool analog_output_is_valid = false;
@@ -816,7 +819,7 @@ void GSRendererPGS::VSync(u32 field, bool registers_written, bool refresh_frame)
 		uint32_t output_width = wsi.get_device().get_swapchain_view().get_view_width();
 		uint32_t output_height = wsi.get_device().get_swapchain_view().get_view_height();
 
-		if (frame_index != 0)
+		if (frame_index != 0 && device.frame_duplication_aware)
 			wsi.set_next_present_is_duplicated();
 
 		auto &dev = wsi.get_device();

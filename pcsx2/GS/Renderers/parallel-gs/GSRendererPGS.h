@@ -90,6 +90,7 @@ private:
 	WindowInfo window_info = {};
 	bool has_wsi_begin_frame = false;
 	bool has_presented_in_current_swapchain = false;
+	bool frame_duplication_aware = true;
 };
 
 class GSRendererPGS
