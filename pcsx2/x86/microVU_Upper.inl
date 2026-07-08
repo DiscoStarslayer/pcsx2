@@ -318,7 +318,7 @@ static bool mVUupperSoftHelperReadsQ(VuUpperFmacSoftOp op)
 	}
 }
 
-static void mVUemitUpperSoftHelperCall(microVU& mVU, VuUpperFmacSoftOp op)
+static void mVUemitUpperSoftHelperCall(microVU& mVU, VuUpperFmacSoftOp op, bool import_flags = true)
 {
 	static constexpr u32 VU_FMAC_STICKY_SOURCE_VALID = 1u << 20;
 	static constexpr u32 VU_FMAC_NATIVE_PRODUCT_UNDERFLOW = 1u << 21;
@@ -575,6 +575,8 @@ static void mVUemitUpperSoftHelperCall(microVU& mVU, VuUpperFmacSoftOp op)
 		xFastCall((void*)vuUpperFmacSoftNativeBridge, arg1reg, arg2reg);
 	}
 	mVUrestoreRegs(mVU, true, false);
+	if (!import_flags)
+		return;
 	if (op == VuUpperFmacSoftOp::MADD || op == VuUpperFmacSoftOp::MSUB)
 		xOR(ptr32[&mVU.regs().statusflag], VU_FMAC_NATIVE_PRODUCT_UNDERFLOW);
 	if (op == VuUpperFmacSoftOp::ADDi || op == VuUpperFmacSoftOp::SUBi || op == VuUpperFmacSoftOp::MULi)
@@ -645,6 +647,20 @@ static void mVUemitUpperSoftHelperCall(microVU& mVU, VuUpperFmacSoftOp op)
 	}
 }
 
+static bool mVUupperSoftHelperNeedsRecompiledMaskedAccFlags(microVU& mVU, VuUpperFmacSoftOp op)
+{
+	return mVU.index == 0 && op == VuUpperFmacSoftOp::SUBA && _X_Y_Z_W != 0xf;
+}
+
+static void mVUemitUpperSoftHelperRecompiledMaskedAccFlags(microVU& mVU)
+{
+	// For this helper case, the C++ helper only supplies the softfloat ACC value.
+	// microVU owns the delayed MAC/status flags for the merged ACC vector.
+	const xmm& ACC = mVU.regAlloc->allocReg(32, 0, 0xf);
+	mVUupdateFlags(mVU, ACC);
+	mVU.regAlloc->clearNeeded(ACC);
+}
+
 // Normal FMAC Opcodes
 static void mVU_FMACa(microVU& mVU, int recPass, int opCase, int opType, bool isACC, microOpcode opEnum, int clampType)
 {
@@ -653,7 +669,11 @@ static void mVU_FMACa(microVU& mVU, int recPass, int opCase, int opType, bool is
 	{
 		if (mVUCanUseUpperSoftHelper(mVU, opCase, opType, isACC))
 		{
-			mVUemitUpperSoftHelperCall(mVU, mVUselectUpperSoftHelperOp(mVU, opCase, opType, isACC));
+			const VuUpperFmacSoftOp soft_op = mVUselectUpperSoftHelperOp(mVU, opCase, opType, isACC);
+			const bool recompile_masked_acc_flags = mVUupperSoftHelperNeedsRecompiledMaskedAccFlags(mVU, soft_op);
+			mVUemitUpperSoftHelperCall(mVU, soft_op, !recompile_masked_acc_flags);
+			if (recompile_masked_acc_flags)
+				mVUemitUpperSoftHelperRecompiledMaskedAccFlags(mVU);
 			mVU.profiler.EmitOp(opEnum);
 			return;
 		}
