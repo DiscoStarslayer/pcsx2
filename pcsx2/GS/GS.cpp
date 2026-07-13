@@ -114,6 +114,7 @@ static RenderAPI GetAPIForRenderer(GSRendererType renderer)
 #endif
 
 		case GSRendererType::SW:
+		case GSRendererType::Null:
 			// Hack.
 			return RenderAPI::Vulkan;
 
