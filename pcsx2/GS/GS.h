@@ -89,6 +89,7 @@ void GSUpdateDisplayWindow();
 void GSSetVSyncMode(GSVSyncMode mode, bool allow_present_throttle);
 
 GSRendererType GSGetCurrentRenderer();
+std::string GSGetDeviceName();
 bool GSIsHardwareRenderer();
 std::string GetDefaultAdapter();
 bool GSWantsExclusiveFullscreen();

@@ -651,10 +651,10 @@ void GSRendererPGS::VSync(u32 field, bool registers_written, bool refresh_frame)
 
 		// If we have CRT emulation, we deal with deinterlacing there.
 		info.skip_deinterlace = GSConfig.PGSPhosphorPrimaries != PGS_CRT_NONE;
-		auto stats = iface.consume_flush_stats();
+		last_frame_stats = iface.consume_flush_stats();
 
 		// Do not allow frame skip if frame-dupe is used.
-		frame_is_duped = !registers_written && stats.num_render_passes == 0 && stats.num_copies == 0 && iface.vsync_can_skip(info);
+		frame_is_duped = !registers_written && last_frame_stats.num_render_passes == 0 && last_frame_stats.num_copies == 0 && iface.vsync_can_skip(info);
 
 		// Don't waste GPU time scanning out the same thing twice.
 		if (!frame_is_duped || !vsync.image || !m_snapshot.empty())
@@ -663,7 +663,7 @@ void GSRendererPGS::VSync(u32 field, bool registers_written, bool refresh_frame)
 		if (frame_is_duped && !GSConfig.SkipDuplicateFrames)
 			wsi.set_next_present_is_duplicated();
 
-		PerformanceMetrics::Update(registers_written, stats.num_render_passes != 0, false);
+		PerformanceMetrics::Update(registers_written, last_frame_stats.num_render_passes != 0, false);
 	}
 
 	Host::BeginPresentFrame();

@@ -112,6 +112,7 @@ public:
 	void UpdateConfig();
 
 	void GetInternalResolution(int *width, int *height);
+	const ParallelGS::FlushStats &GetLastFrameStats() const { return last_frame_stats; }
 
 	int Freeze(freezeData *data, bool sizeonly);
 	int Defrost(freezeData *data);
@@ -141,6 +142,7 @@ private:
 	ParallelGS::ScanoutResult vsync;
 
 	ParallelGS::SuperSampling current_super_sampling = ParallelGS::SuperSampling::X1;
+	ParallelGS::FlushStats last_frame_stats = {};
 	bool current_ordered_super_sampling = false;
 	bool current_super_sample_textures = false;
 	uint32_t last_internal_width = 0;
