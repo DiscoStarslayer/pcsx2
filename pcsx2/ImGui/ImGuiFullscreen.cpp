@@ -49,7 +49,6 @@ namespace ImGuiFullscreen
 	static constexpr float MENU_BACKGROUND_ANIMATION_TIME = 0.5f;
 
 	static std::optional<RGBA8Image> LoadTextureImage(const char* path);
-	static std::shared_ptr<GSTexture> UploadTexture(const char* path, const RGBA8Image& image);
 	static std::optional<RGBA8Image> LoadSvgTextureImage(const char* path, ImVec2 size, SvgScaling mode);
 	static void TextureLoaderThread();
 

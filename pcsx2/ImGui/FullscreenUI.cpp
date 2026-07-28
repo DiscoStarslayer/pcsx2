@@ -27,6 +27,7 @@
 #include "common/Console.h"
 #include "common/Error.h"
 #include "common/FileSystem.h"
+#include "common/Image.h"
 #include "common/Path.h"
 #include "common/SettingsInterface.h"
 #include "common/SmallString.h"
@@ -581,8 +582,6 @@ void FullscreenUI::Render()
 		LoadCustomBackground();
 	}
 
-	for (std::unique_ptr<GSTexture>& tex : s_cleanup_textures)
-		g_gs_device->Recycle(tex.release());
 	s_cleanup_textures.clear();
 	ImGuiFullscreen::UploadAsyncTextures();
 
@@ -767,8 +766,7 @@ void FullscreenUI::DestroyResources()
 	s_banner_texture.reset();
 	for (auto& tex : s_game_compatibility_textures)
 		tex.reset();
-	for (auto& tex : s_cleanup_textures)
-		g_gs_device->Recycle(tex.release());
+	s_cleanup_textures.clear();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -1902,15 +1900,10 @@ bool FullscreenUI::InitializeSaveStateListEntry(
 	std::vector<u32> screenshot_pixels;
 	if (SaveState_ReadScreenshot(li->path, &screenshot_width, &screenshot_height, &screenshot_pixels))
 	{
-		li->preview_texture =
-			std::unique_ptr<GSTexture>(g_gs_device->CreateTexture(screenshot_width, screenshot_height, 1, GSTexture::Format::Color));
-		if (!li->preview_texture || !li->preview_texture->Update(GSVector4i(0, 0, screenshot_width, screenshot_height),
-										screenshot_pixels.data(), sizeof(u32) * screenshot_width))
-		{
+		li->preview_texture = ImGuiFullscreen::UploadTexture(
+			li->path.c_str(), RGBA8Image(screenshot_width, screenshot_height, std::move(screenshot_pixels)));
+		if (!li->preview_texture)
 			Console.Error("Failed to upload save state image to GPU");
-			if (li->preview_texture)
-				g_gs_device->Recycle(li->preview_texture.release());
-		}
 	}
 
 	return true;

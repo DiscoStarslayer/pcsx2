@@ -18,6 +18,7 @@
 #include <vector>
 
 class GSTexture;
+class RGBA8Image;
 enum class InputLayout : u8;
 
 namespace ImGuiFullscreen
@@ -108,6 +109,7 @@ namespace ImGuiFullscreen
 
 	/// Texture cache.
 	const std::shared_ptr<GSTexture>& GetPlaceholderTexture();
+	std::shared_ptr<GSTexture> UploadTexture(const char* path, const RGBA8Image& image);
 	std::shared_ptr<GSTexture> LoadTexture(std::string_view path);
 	GSTexture* GetCachedTexture(std::string_view name);
 	GSTexture* GetCachedTextureAsync(std::string_view name);

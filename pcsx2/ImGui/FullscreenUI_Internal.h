@@ -274,7 +274,7 @@ namespace FullscreenUI
 	inline std::array<std::shared_ptr<GSTexture>, static_cast<u32>(GameDatabaseSchema::Compatibility::Perfect)>
 		s_game_compatibility_textures;
 	inline std::shared_ptr<GSTexture> s_banner_texture;
-	inline std::vector<std::unique_ptr<GSTexture>> s_cleanup_textures;
+	inline std::vector<std::shared_ptr<GSTexture>> s_cleanup_textures;
 
 	//////////////////////////////////////////////////////////////////////////
 	// Landing
@@ -315,7 +315,7 @@ namespace FullscreenUI
 		std::string title;
 		std::string summary;
 		std::string path;
-		std::unique_ptr<GSTexture> preview_texture;
+		std::shared_ptr<GSTexture> preview_texture;
 		time_t timestamp;
 		s32 slot;
 	};

@@ -73,6 +73,16 @@ GSRendererType GSGetCurrentRenderer()
 	return GSCurrentRenderer;
 }
 
+std::string GSGetDeviceName()
+{
+#ifdef HAVE_PARALLEL_GS
+	if (g_pgs_device)
+		return g_pgs_device->get_device().get_gpu_properties().deviceName;
+#endif
+
+	return g_gs_device ? g_gs_device->GetName() : std::string();
+}
+
 bool GSIsHardwareRenderer()
 {
 	// Null gets flagged as hw.
@@ -114,6 +124,7 @@ static RenderAPI GetAPIForRenderer(GSRendererType renderer)
 #endif
 
 		case GSRendererType::SW:
+		case GSRendererType::Null:
 			// Hack.
 			return RenderAPI::Vulkan;
 
@@ -959,6 +970,23 @@ void GSgetInternalResolution(int* width, int* height)
 
 void GSgetStats(SmallStringBase& info)
 {
+#ifdef HAVE_PARALLEL_GS
+	if (g_pgs_renderer)
+	{
+		const ParallelGS::FlushStats& stats = g_pgs_renderer->GetLastFrameStats();
+		info.format("paraLLEl-GS | {} PRIM | {} RP | {} CPY | {} BAR | {} CLUT",
+			stats.num_primitives, stats.num_render_passes, stats.num_copies,
+			stats.num_copy_barriers, stats.num_palette_updates);
+		return;
+	}
+#endif
+
+	if (!g_gs_device)
+	{
+		info.assign("");
+		return;
+	}
+
 	GSPerfMon& pm = g_perfmon;
 	const char* api_name = GSDevice::RenderAPIToString(g_gs_device->GetRenderAPI());
 	if (GSCurrentRenderer == GSRendererType::SW)
@@ -1034,7 +1062,7 @@ void GSgetStats(SmallStringBase& info)
 
 void GSgetMemoryStats(SmallStringBase& info)
 {
-	if (!g_texture_cache)
+	if (!g_gs_device || !g_texture_cache)
 	{
 		info.assign("");
 		return;
