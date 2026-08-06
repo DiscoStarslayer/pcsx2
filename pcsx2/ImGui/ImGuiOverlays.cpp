@@ -493,7 +493,7 @@ __ri void ImGuiManager::DrawPerformanceOverlay(float& position_y, float scale, f
 			if (GSConfig.OsdShowGPUDebug)
 			{
 #ifdef _WIN32
-				if (g_gs_device->GetRenderAPI() == RenderAPI::D3D12)
+				if (g_gs_device && g_gs_device->GetRenderAPI() == RenderAPI::D3D12)
 				{
 					GSDevice12* dev12 = static_cast<GSDevice12*>(g_gs_device.get());
 
@@ -553,7 +553,7 @@ __ri void ImGuiManager::DrawPerformanceOverlay(float& position_y, float scale, f
 			if (GSConfig.OsdShowGPUDebug)
 			{
 #ifdef _WIN32
-				if (g_gs_device->GetRenderAPI() == RenderAPI::D3D12)
+				if (g_gs_device && g_gs_device->GetRenderAPI() == RenderAPI::D3D12)
 					DRAW_LINE(osd_font, font_size, s_gpu_debug_info_line.c_str(), white_color);
 #endif
 			}
