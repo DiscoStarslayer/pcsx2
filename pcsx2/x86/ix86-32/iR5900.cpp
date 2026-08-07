@@ -14,6 +14,7 @@
 #include "VMManager.h"
 #include "vtlb.h"
 #include "x86/BaseblockEx.h"
+#include "x86/iFPU.h"
 #include "x86/iR5900.h"
 #include "x86/iR5900Analysis.h"
 
@@ -44,7 +45,6 @@ using namespace R5900;
 static bool eeRecNeedsReset = false;
 static bool eeCpuExecuting = false;
 static bool eeRecExitRequested = false;
-static bool g_resetEeScalingStats = false;
 
 #define PC_GETBLOCK(x) PC_GETBLOCK_(x, recLUT)
 
@@ -618,6 +618,7 @@ static void recResetRaw()
 	xSetPtr(SysMemory::GetEERec());
 	_DynGen_Dispatchers();
 	vtlb_DynGenDispatchers();
+	R5900::Dynarec::OpcodeImpl::COP1::GenerateSoftFloatKernels();
 	recPtr = xGetPtr();
 
 	ClearRecLUT(recLutReserve_RAM.data(),
@@ -637,7 +638,6 @@ static void recResetRaw()
 	vtlb_ClearLoadStoreInfo();
 
 	g_branch = 0;
-	g_resetEeScalingStats = true;
 
 	memset(manual_page, 0, sizeof(manual_page));
 	memset(manual_counter, 0, sizeof(manual_counter));
@@ -1280,11 +1280,6 @@ static u32 scaleblockcycles()
 
 #if 0 // Enable this to get some runtime statistics about the scaling result in practice
 	static u32 scaled_overall = 0, unscaled_overall = 0;
-	if (g_resetEeScalingStats)
-	{
-		scaled_overall = unscaled_overall = 0;
-		g_resetEeScalingStats = false;
-	}
 	u32 unscaled = DEFAULT_SCALED_BLOCKS();
 	if (!unscaled) unscaled = 1;
 
@@ -1304,11 +1299,6 @@ u32 scaleblockcycles_clear()
 
 #if 0 // Enable this to get some runtime statistics about the scaling result in practice
 	static u32 scaled_overall = 0, unscaled_overall = 0;
-	if (g_resetEeScalingStats)
-	{
-		scaled_overall = unscaled_overall = 0;
-		g_resetEeScalingStats = false;
-	}
 	u32 unscaled = DEFAULT_SCALED_BLOCKS();
 	if (!unscaled) unscaled = 1;
 

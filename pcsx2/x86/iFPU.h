@@ -11,6 +11,7 @@ namespace Dynarec {
 namespace OpcodeImpl {
 namespace COP1 {
 
+	void GenerateSoftFloatKernels();
 	void recMFC1();
 	void recCFC1();
 	void recMTC1();
