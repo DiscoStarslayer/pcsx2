@@ -516,6 +516,12 @@
     <ClCompile Include="x86\microVU.cpp">
       <ExcludedFromBuild Condition="'$(Platform)'!='x64'">true</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="x86\microVU_SoftFloatTables.cpp">
+      <ExcludedFromBuild Condition="'$(Platform)'!='x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="x86\microVU_SoftFloatTablesRuntime.cpp">
+      <ExcludedFromBuild Condition="'$(Platform)'!='x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="VU0.cpp" />
     <ClCompile Include="VU0micro.cpp" />
     <ClCompile Include="VU0microInterp.cpp" />
@@ -983,6 +989,10 @@
     <ClInclude Include="x86\microVU_IR.h" />
     <ClInclude Include="x86\microVU_Misc.h" />
     <ClInclude Include="x86\microVU_Profiler.h" />
+    <ClInclude Include="x86\microVU_SoftFloat.h" />
+    <ClInclude Include="x86\microVU_SoftFloatTables.h" />
+    <ClInclude Include="x86\microVU_UpperSoft.inl" />
+    <ClInclude Include="x86\SoftFloatEmitter.h" />
     <ClInclude Include="x86\R5900_Profiler.h" />
     <ClInclude Include="VUflags.h" />
     <ClInclude Include="VUops.h" />

@@ -479,6 +479,12 @@
     <ClCompile Include="x86\microVU.cpp">
       <Filter>System\Ps2\EmotionEngine\VU\Dynarec\microVU</Filter>
     </ClCompile>
+    <ClCompile Include="x86\microVU_SoftFloatTables.cpp">
+      <Filter>System\Ps2\EmotionEngine\VU\Dynarec\microVU</Filter>
+    </ClCompile>
+    <ClCompile Include="x86\microVU_SoftFloatTablesRuntime.cpp">
+      <Filter>System\Ps2\EmotionEngine\VU\Dynarec\microVU</Filter>
+    </ClCompile>
     <ClCompile Include="VU0.cpp">
       <Filter>System\Ps2\EmotionEngine\VU\Interpreter</Filter>
     </ClCompile>
@@ -1704,6 +1710,18 @@
       <Filter>System\Ps2\GS\GIF</Filter>
     </ClInclude>
     <ClInclude Include="x86\microVU_Profiler.h">
+      <Filter>System\Ps2\EmotionEngine\VU\Dynarec\microVU</Filter>
+    </ClInclude>
+    <ClInclude Include="x86\microVU_SoftFloat.h">
+      <Filter>System\Ps2\EmotionEngine\VU\Dynarec\microVU</Filter>
+    </ClInclude>
+    <ClInclude Include="x86\microVU_SoftFloatTables.h">
+      <Filter>System\Ps2\EmotionEngine\VU\Dynarec\microVU</Filter>
+    </ClInclude>
+    <ClInclude Include="x86\microVU_UpperSoft.inl">
+      <Filter>System\Ps2\EmotionEngine\VU\Dynarec\microVU</Filter>
+    </ClInclude>
+    <ClInclude Include="x86\SoftFloatEmitter.h">
       <Filter>System\Ps2\EmotionEngine\VU\Dynarec\microVU</Filter>
     </ClInclude>
     <ClInclude Include="DebugTools\DebugInterface.h">
