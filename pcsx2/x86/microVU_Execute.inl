@@ -11,6 +11,11 @@
 //------------------------------------------------------------------
 static bool mvuNeedsFPCRUpdate(mV)
 {
+	// Soft-float owns a fixed PS2 execution mode rather than the configurable
+	// host approximation used by the normal recompiler.
+	if (CHECK_VU_SOFT(mVU.index))
+		return true;
+
 	// always update on the vu1 thread
 	if (isVU1 && THREAD_VU1)
 		return true;
@@ -31,9 +36,11 @@ void mVUdispatcherAB(mV)
 		if (!isVU1) xFastCall((void*)mVUexecuteVU0, arg1reg, arg2reg);
 		else        xFastCall((void*)mVUexecuteVU1, arg1reg, arg2reg);
 
-		// Load VU's MXCSR state
+		// Soft-float keeps the PS2 truncate/DAZ/FTZ mode for the whole VU
+		// dispatch, avoiding serializing mode changes around each arithmetic op.
 		if (mvuNeedsFPCRUpdate(mVU))
-			xLDMXCSR(ptr32[isVU0 ? &EmuConfig.Cpu.VU0FPCR.bitmask : &EmuConfig.Cpu.VU1FPCR.bitmask]);
+			xLDMXCSR(ptr32[CHECK_VU_SOFT(mVU.index) ? &s_vu_soft_truncate_daz_ftz_mxcsr :
+				(isVU0 ? &EmuConfig.Cpu.VU0FPCR.bitmask : &EmuConfig.Cpu.VU1FPCR.bitmask)]);
 
 		// Load Regs
 		xMOVAPS (xmmT1, ptr128[&mVU.regs().VI[REG_P].UL]);
@@ -95,9 +102,10 @@ void mVUdispatcherCD(mV)
 	{
 		xScopedStackFrame frame(false, true);
 
-		// Load VU's MXCSR state
+		// Load the same execution mode used by the primary dispatcher.
 		if (mvuNeedsFPCRUpdate(mVU))
-			xLDMXCSR(ptr32[isVU0 ? &EmuConfig.Cpu.VU0FPCR.bitmask : &EmuConfig.Cpu.VU1FPCR.bitmask]);
+			xLDMXCSR(ptr32[CHECK_VU_SOFT(mVU.index) ? &s_vu_soft_truncate_daz_ftz_mxcsr :
+				(isVU0 ? &EmuConfig.Cpu.VU0FPCR.bitmask : &EmuConfig.Cpu.VU1FPCR.bitmask)]);
 
 		mVUrestoreRegs(mVU);
 		xMOV(gprF0, ptr32[&mVU.regs().micro_statusflags[0]]);
@@ -346,7 +354,7 @@ _mVUt void mVUcleanUp()
 	if ((xGetPtr() < mVU.prog.x86start) || (xGetPtr() >= mVU.prog.x86end))
 	{
 		Console.WriteLn(vuIndex ? Color_Orange : Color_Magenta, "microVU%d: Program cache limit reached.", mVU.index);
-		mVUreset(mVU, false);
+		mVUreset(mVU);
 	}
 
 	mVU.cycles = mVU.totalCycles - std::max(0, mVU.cycles);

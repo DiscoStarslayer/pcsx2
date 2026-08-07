@@ -5,6 +5,8 @@
 #include "microVU.h"
 #include <array>
 
+inline constexpr int mVUsoftAccRegisterIndex = 32;
+
 struct regCycleInfo
 {
 	u8 x : 4;
@@ -139,6 +141,7 @@ struct microLowerOp
 	bool memReadIt;  // Read If (VI reg) from memory (used by branches)
 	bool readFlags;  // Current Instruction reads Status, Mac, or Clip flags
 	bool isMemWrite; // Current Instruction writes to VU memory
+	bool deferXgkickSync; // Store performs overlap-aware XGKick synchronization.
 	bool isKick;     // Op is a kick so don't count kick cycles
 };
 
@@ -146,6 +149,7 @@ struct microFlagInst
 {
 	bool doFlag;      // Update Flag on this Instruction
 	bool doNonSticky; // Update O,U,S,Z (non-sticky) bits on this Instruction (status flag only)
+	bool doValue;     // The architectural flag value, rather than only its pipeline slot, is live.
 	u8   write;       // Points to the instance that should be written to (s-stage write)
 	u8   lastWrite;   // Points to the instance that was last written to (most up-to-date flag)
 	u8   read;        // Points to the instance that should be read by a lower instruction (t-stage read)
@@ -231,6 +235,7 @@ protected:
 
 	std::array<microMapXMM, xmmTotal> xmmMap;
 	std::array<microMapGPR, gprTotal> gprMap;
+	std::array<u8, mVUsoftAccRegisterIndex + 1> softNonExtendedMask = {};
 
 	int         counter; // Current allocation count
 	int         index;   // VU0 or VU1
@@ -367,6 +372,8 @@ public:
 			clearReg(i);
 		for (int i = 0; i < gprTotal; i++)
 			clearGPR(i);
+		softNonExtendedMask.fill(0);
+		softNonExtendedMask[0] = 0xf;
 
 		counter = 0;
 		regAllocCOP2 = cop2mode;
@@ -433,20 +440,21 @@ public:
 		return count;
 	}
 
-	bool hasRegVF(int vfreg)
-	{
-		for (int i = 0; i < xmmTotal; i++)
-		{
-			if (xmmMap[i].VFreg == vfreg)
-				return true;
-		}
-
-		return false;
-	}
-
 	int getRegVF(int i)
 	{
 		return (i < xmmTotal) ? xmmMap[i].VFreg : -1;
+	}
+
+	u8 getSoftNonExtendedMask(int vfreg) const
+	{
+		return (vfreg >= 0 && vfreg < static_cast<int>(softNonExtendedMask.size())) ?
+			softNonExtendedMask[vfreg] : 0;
+	}
+
+	void markSoftNonExtended(int vfreg, int xyzw)
+	{
+		if (vfreg > 0 && vfreg < static_cast<int>(softNonExtendedMask.size()))
+			softNonExtendedMask[vfreg] |= static_cast<u8>(xyzw & 0xf);
 	}
 
 	int getGPRCount()
@@ -465,17 +473,6 @@ public:
 		}
 
 		return count;
-	}
-
-	bool hasRegVI(int vireg)
-	{
-		for (int i = 0; i < gprTotal; i++)
-		{
-			if (gprMap[i].VIreg == vireg)
-				return true;
-		}
-
-		return false;
 	}
 
 	int getRegVI(int i)
@@ -500,6 +497,18 @@ public:
 			writeBackReg(xRegister32(i), true);
 			if (clearState)
 				clearGPR(i);
+		}
+	}
+
+	void flushCallerSavedGPRs()
+	{
+		for (int i = 0; i < gprTotal; i++)
+		{
+			if (!xRegister32::IsCallerSaved(i))
+				continue;
+
+			writeBackReg(xRegister32(i), true);
+			clearGPR(i);
 		}
 	}
 
@@ -765,6 +774,8 @@ public:
 	{
 		//DevCon.WriteLn("vfLoadReg = %02d, vfWriteReg = %02d, xyzw = %x, clone = %d",vfLoadReg,vfWriteReg,xyzw,(int)cloneWrite);
 		counter++;
+		if (vfWriteReg > 0 && vfWriteReg < static_cast<int>(softNonExtendedMask.size()))
+			softNonExtendedMask[vfWriteReg] &= static_cast<u8>(~xyzw);
 		if (vfLoadReg >= 0) // Search For Cached Regs
 		{
 			for (int i = 0; i < xmmTotal; i++)

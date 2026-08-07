@@ -383,6 +383,8 @@ __ri void flagSet(mV, bool setMacFlag)
 		{
 			if (setMacFlag)
 				mFLAG.doFlag = 1;
+			else
+				sFLAG.doValue = 1;
 			sFLAG.doNonSticky = 1;
 			calcOPS++;
 		}
