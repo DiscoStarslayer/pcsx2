@@ -121,6 +121,7 @@ struct alignas(16) VURegs
 	REG_VI VI[32]; // needs to be 128bit x 32 (cottonvibes)
 
 	VECTOR ACC;
+	u32 accflag;
 	REG_VI q;
 	REG_VI p;
 

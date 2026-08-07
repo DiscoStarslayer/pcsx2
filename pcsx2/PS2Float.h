@@ -12,7 +12,6 @@ public:
 	static constexpr u32 MAX_FLOATING_POINT_VALUE = 0x7FFFFFFF;
 	static constexpr u32 MIN_FLOATING_POINT_VALUE = 0xFFFFFFFF;
 	static constexpr u32 ONE = 0x3F800000;
-	static constexpr u32 MIN_ONE = 0xBF800000;
 
 	u32 raw;
 	u8 flags = 0;
@@ -74,11 +73,6 @@ public:
 		return PS2Float(ONE);
 	}
 
-	__fi static PS2Float MinOne()
-	{
-		return PS2Float(MIN_ONE);
-	}
-
 	static u8 Clip(u32 f1, u32 f2, bool& cplus, bool& cminus);
 
 	PS2Float Add(PS2Float addend);
@@ -91,17 +85,20 @@ public:
 	PS2Float AddMulResult(PS2Float mulres);
 
 	PS2Float MulAddAcc(PS2Float opsend, PS2Float optend);
+	PS2Float AddMulResultAcc(PS2Float mulres);
 
 	PS2Float MulSub(PS2Float opsend, PS2Float optend);
 	PS2Float SubMulResult(PS2Float mulres);
 
 	PS2Float MulSubAcc(PS2Float opsend, PS2Float optend);
+	PS2Float SubMulResultAcc(PS2Float mulres);
 
 	PS2Float Div(PS2Float divend);
 
 	PS2Float Sqrt();
 
 	PS2Float Rsqrt(PS2Float other);
+	PS2Float VuRsqrt(PS2Float other);
 
 	PS2Float ERCPR();
 
@@ -138,6 +135,7 @@ private:
 	}
 
 	PS2Float DoAdd(PS2Float other);
+	PS2Float RsqrtImpl(PS2Float other);
 
 	__fi PS2Float DoMul(PS2Float other);
 

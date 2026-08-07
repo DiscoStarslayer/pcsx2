@@ -28,7 +28,7 @@ static __fi BoothRecode Booth(u32 a, u32 b, u32 bit)
 	a += (test == 3 || test == 4) ? a : 0;
 	u32 neg = (test >= 4 && test <= 6) ? ~0u : 0;
 	u32 pos = 1 << (bit * 2);
-	a ^= (neg & -pos);
+	a ^= (neg & (0u - pos));
 	a &= (test >= 1 && test <= 6) ? ~0u : 0;
 	return {a, neg & pos};
 }
@@ -65,7 +65,8 @@ static __fi u64 MulMantissa(u32 a, u32 b)
 	t5.lo &= ~0x7fffu;
 	t5.hi &= ~0x7fffu;
 	u32 ps2lo = t5.lo + t5.hi;
-	return full - ((ps2lo ^ full) & 0x8000);
+	const u8 correction = ((ps2lo ^ full) & 0x8000) != 0;
+	return full - (static_cast<u64>(correction) << 15);
 }
 } // namespace PS2FloatDetail
 
