@@ -189,7 +189,7 @@ namespace x86Emitter
 	{
 		pxAssert(param1.GetOperandSize() == param2.GetOperandSize());
 
-		xOpWrite0F(param1.GetPrefix16(), is_s8(imm) ? 0x6b : 0x69, param1, param2, is_s8(imm) ? 1 : param1.GetImmSize());
+		xOpWrite(param1.GetPrefix16(), is_s8(imm) ? 0x6b : 0x69, param1, param2, is_s8(imm) ? 1 : param1.GetImmSize());
 
 		if (is_s8(imm))
 			xWrite8((u8)imm);
@@ -222,7 +222,7 @@ namespace x86Emitter
 	void xImpl_Group8::operator()(const xRegister16or32or64& bitbase, const xRegister16or32or64& bitoffset) const
 	{
 		pxAssert(bitbase->GetOperandSize() == bitoffset->GetOperandSize());
-		xOpWrite0F(bitbase->GetPrefix16(), 0xa3 | (InstType << 3), bitbase, bitoffset);
+		xOpWrite0F(bitbase->GetPrefix16(), 0xa3 | (InstType << 3), bitoffset, bitbase);
 	}
 	void xImpl_Group8::operator()(const xIndirect64& bitbase, u8 bitoffset) const { xOpWrite0F(0xba, InstType, bitbase, bitoffset); }
 	void xImpl_Group8::operator()(const xIndirect32& bitbase, u8 bitoffset) const { xOpWrite0F(0xba, InstType, bitbase, bitoffset); }
