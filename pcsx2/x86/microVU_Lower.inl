@@ -2416,6 +2416,8 @@ mVUop(mVU_LQI)
 // SQ/SQD/SQI
 //------------------------------------------------------------------
 
+static __fi void mVU_XGKICK_SYNC_SQI(mV);
+
 mVUop(mVU_SQ)
 {
 	pass1 { mVUanalyzeSQ(mVU, _Fs_, _It_, false); }
@@ -2440,7 +2442,6 @@ mVUop(mVU_SQ)
 			}
 			mVUaddrFix(mVU, gprT1q, gprT2q);
 		}
-
 		const xmm& Fs = mVU.regAlloc->allocReg(_Fs_, _XYZW_PS ? -1 : 0, _X_Y_Z_W);
 		mVUsaveReg(Fs, optptr.has_value() ? optptr.value() : xComplexAddress(gprT2q, mVU.regs().Mem, gprT1q), _X_Y_Z_W, 1);
 		mVU.regAlloc->clearNeeded(Fs);
@@ -2482,7 +2483,11 @@ mVUop(mVU_SQD)
 
 mVUop(mVU_SQI)
 {
-	pass1 { mVUanalyzeSQ(mVU, _Fs_, _It_, true); }
+	pass1
+	{
+		mVUanalyzeSQ(mVU, _Fs_, _It_, true);
+		mVUlow.deferXgkickSync = isVU1 && !THREAD_VU1 && _It_ != 0;
+	}
 	pass2
 	{
 		void* ptr = mVU.regs().Mem;
@@ -2494,6 +2499,8 @@ mVUop(mVU_SQI)
 			mVU.regAlloc->clearNeeded(regT);
 			mVUaddrFix(mVU, gprT1q, gprT2q);
 		}
+		if (mVUlow.deferXgkickSync && CHECK_XGKICKHACK)
+			mVU_XGKICK_SYNC_SQI(mVU);
 		const xmm& Fs = mVU.regAlloc->allocReg(_Fs_, _XYZW_PS ? -1 : 0, _X_Y_Z_W);
 		if (_It_)
 			mVUsaveReg(Fs, xComplexAddress(gprT2q, ptr, gprT1q), _X_Y_Z_W, 1);
@@ -2711,13 +2718,26 @@ void mVU_XGKICK_(u32 addr)
 
 void _vuXGKICKTransfermVU(bool flush)
 {
+	static constexpr u32 buffered_packet = 0x80000000u;
 	while (VU1.xgkickenable && (flush || VU1.xgkickcyclecount >= 2))
 	{
 		u32 transfersize = 0;
+		if (VU1.xgkickdiff & buffered_packet)
+		{
+			VU1.xgkickdiff &= ~buffered_packet;
+			gifUnit.lastTranType = GIF_TRANS_XGKICK;
+			if (!gifUnit.CanDoPath1())
+				gifUnit.stat.P1Q = 1;
+			gifUnit.Execute(false, false);
+			if (VU1.xgkickendpacket)
+			{
+				VU1.xgkickenable = false;
+				break;
+			}
+		}
 
 		if (VU1.xgkicksizeremaining == 0)
 		{
-			//VUM_LOG("XGKICK reading new tag from %x", VU1.xgkickaddr);
 			u32 size = gifUnit.GetGSPacketSize(GIF_PATH_1, vuRegs[1].Mem, VU1.xgkickaddr, ~0u, flush);
 			VU1.xgkicksizeremaining = size & 0xFFFF;
 			VU1.xgkickendpacket = size >> 31;
@@ -2725,12 +2745,9 @@ void _vuXGKICKTransfermVU(bool flush)
 
 			if (VU1.xgkicksizeremaining == 0)
 			{
-				//VUM_LOG("Invalid GS packet size returned, cancelling XGKick");
 				VU1.xgkickenable = false;
 				break;
 			}
-			//else
-				//VUM_LOG("XGKICK New tag size %d bytes EOP %d", VU1.xgkicksizeremaining, VU1.xgkickendpacket);
 		}
 
 		if (!flush)
@@ -2743,8 +2760,6 @@ void _vuXGKICKTransfermVU(bool flush)
 			transfersize = VU1.xgkicksizeremaining;
 			transfersize = std::min(transfersize, VU1.xgkickdiff);
 		}
-
-		//VUM_LOG("XGKICK Transferring %x bytes from %x size %x", transfersize * 0x10, VU1.xgkickaddr, VU1.xgkicksizeremaining);
 
 		// Would be "nicer" to do the copy until it's all up, however this really screws up PATH3 masking stuff
 		// So lets just do it the other way :)
@@ -2770,35 +2785,192 @@ void _vuXGKICKTransfermVU(bool flush)
 		VU1.xgkickdiff = 0x4000 - VU1.xgkickaddr;
 
 		if (VU1.xgkickendpacket && !VU1.xgkicksizeremaining)
-		//	VUM_LOG("XGKICK next addr %x left size %x", VU1.xgkickaddr, VU1.xgkicksizeremaining);
-		//else
 		{
-			//VUM_LOG("XGKICK transfer finished");
 			VU1.xgkickenable = false;
 			// Check if VIF is waiting for the GIF to not be busy
 		}
 	}
-	//VUM_LOG("XGKick run complete Enabled %d", VU1.xgkickenable);
+}
+
+void _vuXGKICKPreparemVU()
+{
+	const u32 size = gifUnit.GetGSPacketSize(GIF_PATH_1, vuRegs[1].Mem,
+		VU1.xgkickaddr, ~0u, true);
+	VU1.xgkicksizeremaining = size & 0xffff;
+	VU1.xgkickendpacket = size >> 31;
+	VU1.xgkickdiff = 0x4000 - VU1.xgkickaddr;
+	if (VU1.xgkicksizeremaining == 0)
+		VU1.xgkickenable = false;
+}
+
+static __fi void mVUclampXgkickBytes(const xRegister32& byte_count)
+{
+	xCMP(byte_count, ptr32[&VU1.xgkicksizeremaining]);
+	xCMOVA(byte_count, ptr32[&VU1.xgkicksizeremaining]);
+	xCMP(byte_count, ptr32[&VU1.xgkickdiff]);
+	xCMOVA(byte_count, ptr32[&VU1.xgkickdiff]);
 }
 
 static __fi void mVU_XGKICK_SYNC(mV, bool flush)
 {
-	mVU.regAlloc->flushCallerSavedRegisters();
+	if (flush)
+	{
+		mVU.regAlloc->flushCallerSavedRegisters();
+		xTEST(ptr32[&VU1.xgkickenable], 0x1);
+		xForwardJZ32 flush_skip_xgkick;
+		xADD(ptr32[&VU1.xgkickcyclecount], mVUlow.kickcycles);
+		mVUbackupRegs(mVU, true, true);
+		xFastCall(_vuXGKICKTransfermVU, true);
+		mVUrestoreRegs(mVU, true, true);
+		flush_skip_xgkick.SetTarget();
+		return;
+	}
 
 	// Add the single cycle remainder after this instruction, some games do the store
 	// on the second instruction after the kick and that needs to go through first
 	// but that's VERY close..
 	xTEST(ptr32[&VU1.xgkickenable], 0x1);
 	xForwardJZ32 skipxgkick;
-	xADD(ptr32[&VU1.xgkickcyclecount], mVUlow.kickcycles-1);
+	xADD(ptr32[&VU1.xgkickcyclecount], mVUlow.kickcycles - 1);
 	xCMP(ptr32[&VU1.xgkickcyclecount], 2);
 	xForwardJL32 needcycles;
-	mVUbackupRegs(mVU, true, true);
-	xFastCall(_vuXGKICKTransfermVU, flush);
-	mVUrestoreRegs(mVU, true, true);
+
+	if (THREAD_VU1)
+	{
+		mVUbackupRegs(mVU, true, true);
+		xFastCall(_vuXGKICKTransfermVU, false);
+		mVUrestoreRegs(mVU, true, true);
+	}
+	else
+	{
+		Gif_Path& path = gifUnit.gifPath[GIF_PATH_1];
+		const xRegister32& transfer_size = r10d;
+		const xRegister32& transferred_size = r9d;
+		const xRegister32& copy_value = r11d;
+		std::array<std::optional<xForwardJump32>, 4> fast_failures;
+		xPUSH(r9);
+		xPUSH(r10);
+		xPUSH(r11);
+		xCMP(ptr32[&VU1.xgkicksizeremaining], 0);
+		fast_failures[0].emplace(Jcc_Equal);
+		xTEST(ptr32[&VU1.xgkickdiff], 0x80000000u);
+		fast_failures[1].emplace(Jcc_NotZero);
+		xMOV(transfer_size, ptr32[&VU1.xgkickcyclecount]);
+		xSHL(transfer_size, 3);
+		mVUclampXgkickBytes(transfer_size);
+		xMOV(transferred_size, transfer_size);
+		xMOV(gprT1, ptr32[&path.curSize]);
+		xADD(gprT1, transfer_size);
+		xCMP(gprT1, ptr32[&path.buffSize]);
+		fast_failures[2].emplace(Jcc_Above);
+
+		// Mirror CopyGSPacketData()'s MTGS ownership check before writing directly.
+		// MTGS only decreases readAmount, so its concurrent progress can only make a
+		// failed check conservative. Plain aligned loads have acquire semantics on x86.
+		xMOV(gprT2, ptr32[&path.readAmount]);
+		xADD(gprT2, ptr32[&path.gsPack.readAmount]);
+		xForwardJZ32 fast_no_pending_reads;
+		xNEG(gprT2);
+		xADD(gprT2, ptr32[&path.curOffset]);
+		xSUB(gprT2, ptr32[&path.gsPack.size]);
+		xForwardJGE32 fast_reads_behind_write;
+		xADD(gprT2, ptr32[&path.buffLimit]);
+		xCMP(gprT2, gprT1);
+		fast_failures[3].emplace(Jcc_LessOrEqual);
+		fast_no_pending_reads.SetTarget();
+		fast_reads_behind_write.SetTarget();
+
+		// Buffer all bytes at their hardware read time. Parser-visible work is deferred
+		// until a full XGKICK boundary, where allocator state is already synchronized.
+		xMOV(gprT1q, ptr64[&path.buffer]);
+		xMOV(gprT2, ptr32[&path.curSize]);
+		xADD(gprT1q, gprT2q);
+		xMOV64(gprT2q, reinterpret_cast<uptr>(VU1.Mem));
+		xMOV(copy_value, ptr32[&VU1.xgkickaddr]);
+		xADD(gprT2q, r11);
+		xADD(ptr32[&path.curSize], transfer_size);
+		u8* const copy_loop = xGetPtr();
+		xMOV(r11, ptr64[gprT2q]);
+		xMOV(ptr64[gprT1q], r11);
+		xADD(gprT1q, 8);
+		xADD(gprT2q, 8);
+		xSUB(transfer_size, 8);
+		xJcc32(Jcc_NotZero,
+			static_cast<s32>(reinterpret_cast<sptr>(copy_loop) - (reinterpret_cast<sptr>(xGetPtr()) + 6)));
+
+		xMOV(copy_value, transferred_size);
+		xSHR(copy_value, 3);
+		xSUB(ptr32[&VU1.xgkickcyclecount], copy_value);
+		xADD(ptr32[&VU1.xgkickaddr], transferred_size);
+		xSUB(ptr32[&VU1.xgkicksizeremaining], transferred_size);
+		xSUB(ptr32[&VU1.xgkickdiff], transferred_size);
+		xCMP(ptr32[&VU1.xgkickaddr], 0x4000);
+		xForwardJNE8 fast_no_wrap;
+		xMOV(ptr32[&VU1.xgkickaddr], 0);
+		xMOV(ptr32[&VU1.xgkickdiff], 0x4000);
+		fast_no_wrap.SetTarget();
+		xCMP(ptr32[&VU1.xgkicksizeremaining], 0);
+		xForwardJNE8 fast_packet_incomplete;
+		xOR(ptr32[&VU1.xgkickdiff], 0x80000000u);
+		fast_packet_incomplete.SetTarget();
+		xForwardJump32 fast_success;
+
+		for (std::optional<xForwardJump32>& failure : fast_failures)
+			failure->SetTarget();
+		xPOP(r11);
+		xPOP(r10);
+		xPOP(r9);
+		mVUbackupRegs(mVU, true, true);
+		xFastCall(_vuXGKICKTransfermVU, false);
+		mVUrestoreRegs(mVU, true, true);
+		xForwardJump32 fast_finished;
+		fast_success.SetTarget();
+		xPOP(r11);
+		xPOP(r10);
+		xPOP(r9);
+		fast_finished.SetTarget();
+	}
 	needcycles.SetTarget();
 	xADD(ptr32[&VU1.xgkickcyclecount], 1);
 	skipxgkick.SetTarget();
+}
+
+static __fi void mVU_XGKICK_SYNC_SQI(mV)
+{
+	xTEST(ptr32[&VU1.xgkickenable], 0x1);
+	xForwardJZ32 skip_store_sync;
+	xPUSH(gprT1q);
+	xPUSH(r9);
+	xPUSH(r10);
+	xPUSH(r11);
+
+	std::array<std::optional<xForwardJump32>, 3> no_overlap;
+	xMOV(r9d, ptr32[&VU1.xgkickcyclecount]);
+	xADD(r9d, mVUlow.kickcycles);
+	xCMP(r9d, 2);
+	no_overlap[0].emplace(Jcc_Less);
+	xSHL(r9d, 3);
+	mVUclampXgkickBytes(r9d);
+	xMOV(r10d, ptr32[&VU1.xgkickaddr]);
+	xADD(r9d, r10d);
+	xCMP(gprT1, r9d);
+	no_overlap[1].emplace(Jcc_AboveOrEqual);
+	xMOV(r11d, gprT1);
+	xADD(r11d, 16);
+	xCMP(r11d, r10d);
+	no_overlap[2].emplace(Jcc_BelowOrEqual);
+
+	mVU_XGKICK_SYNC(mVU, false);
+	xForwardJump32 store_sync_finished;
+	for (std::optional<xForwardJump32>& branch : no_overlap)
+		branch->SetTarget();
+	xADD(ptr32[&VU1.xgkickcyclecount], mVUlow.kickcycles);
+	store_sync_finished.SetTarget();
+	xPOP(r11);
+	xPOP(r10);
+	xPOP(r9);
+	xPOP(gprT1q);
+	skip_store_sync.SetTarget();
 }
 
 static __fi void mVU_XGKICK_DELAY(mV)
@@ -2806,11 +2978,6 @@ static __fi void mVU_XGKICK_DELAY(mV)
 	mVU.regAlloc->flushCallerSavedRegisters();
 
 	mVUbackupRegs(mVU, true, true);
-#if 0 // XGkick Break - ToDo: Change "SomeGifPathValue" to w/e needs to be tested
-	xTEST (ptr32[&SomeGifPathValue], 1); // If '1', breaks execution
-	xMOV  (ptr32[&mVU.resumePtrXG], (uptr)xGetPtr() + 10 + 6);
-	xJcc32(Jcc_NotZero, (uptr)mVU.exitFunctXG - ((uptr)xGetPtr()+6));
-#endif
 	xFastCall(mVU_XGKICK_, ptr32[&mVU.VIxgkick]);
 	mVUrestoreRegs(mVU, true, true);
 }
@@ -2826,7 +2993,7 @@ mVUop(mVU_XGKICK)
 		}
 		mVUanalyzeXGkick(mVU, _Is_, 1);
 	}
-		pass2
+	pass2
 	{
 		if (CHECK_XGKICKHACK)
 		{
@@ -2861,6 +3028,13 @@ mVUop(mVU_XGKICK)
 			xMOV(ptr32[&VU1.xgkickaddr], gprT1);
 		}
 		mVU.regAlloc->clearNeeded(regS);
+		if (CHECK_XGKICKHACK && !THREAD_VU1)
+		{
+			mVU.regAlloc->flushCallerSavedRegisters();
+			mVUbackupRegs(mVU, true, true);
+			xFastCall((void*)_vuXGKICKPreparemVU);
+			mVUrestoreRegs(mVU, true, true);
+		}
 		mVU.profiler.EmitOp(opXGKICK);
 	}
 	pass3 { mVUlog("XGKICK vi%02d", _Fs_); }
