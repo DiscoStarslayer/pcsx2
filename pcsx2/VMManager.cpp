@@ -3102,6 +3102,10 @@ void VMManager::CheckForCPUConfigChanges(const Pcsx2Config& old_config)
 
 	Console.WriteLn("Updating CPU configuration...");
 	FPControlRegister::SetCurrent(EmuConfig.Cpu.FPUFPCR);
+	if (EmuConfig.Cpu.VU0SoftFloat != old_config.Cpu.VU0SoftFloat)
+		VU0.accflag = 0;
+	if (EmuConfig.Cpu.VU1SoftFloat != old_config.Cpu.VU1SoftFloat)
+		VU1.accflag = 0;
 	Internal::ClearCPUExecutionCaches();
 	memBindConditionalHandlers();
 

@@ -46,15 +46,9 @@ AdvancedSettingsWidget::AdvancedSettingsWidget(SettingsWindow* settings_dialog, 
 	connect(m_ui.vu0ClampMode, &QComboBox::currentIndexChanged, [this](int index) { setClampingMode(0, index); });
 	connect(m_ui.vu1ClampMode, &QComboBox::currentIndexChanged, [this](int index) { setClampingMode(1, index); });
 
-	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.eeSoftAddSub, "EmuCore/CPU/Recompiler", "fpuSoftAddSub", false);
-	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.eeSoftMul, "EmuCore/CPU/Recompiler", "fpuSoftMul", false);
-	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.eeSoftDivSqrt, "EmuCore/CPU/Recompiler", "fpuSoftDivSqrt", false);
-	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.vu0SoftAddSub, "EmuCore/CPU/Recompiler", "vu0SoftAddSub", false);
-	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.vu0SoftMul, "EmuCore/CPU/Recompiler", "vu0SoftMul", false);
-	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.vu0SoftDivSqrt, "EmuCore/CPU/Recompiler", "vu0SoftDivSqrt", false);
-	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.vu1SoftAddSub, "EmuCore/CPU/Recompiler", "vu1SoftAddSub", false);
-	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.vu1SoftMul, "EmuCore/CPU/Recompiler", "vu1SoftMul", false);
-	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.vu1SoftDivSqrt, "EmuCore/CPU/Recompiler", "vu1SoftDivSqrt", false);
+	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.eeSoftFloat, "EmuCore/CPU", "FPU.SoftFloat", false);
+	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.vu0SoftFloat, "EmuCore/CPU", "VU0.SoftFloat", false);
+	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.vu1SoftFloat, "EmuCore/CPU", "VU1.SoftFloat", false);
 
 	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.iopRecompiler, "EmuCore/CPU/Recompiler", "EnableIOP", true);
 
@@ -141,6 +135,13 @@ AdvancedSettingsWidget::AdvancedSettingsWidget(SettingsWindow* settings_dialog, 
 	dialog()->registerWidgetHelp(m_ui.vu1ClampMode, tr("VU1 Clamping Mode"), tr("Normal (Default)"),
 		tr("Changes how PCSX2 handles keeping floats in a standard x86 range in the Emotion Engine's Vector Unit 1 (EE VU1). "
 		   "The default value handles the vast majority of games; <b>modifying this setting when a game is not having a visible problem can cause instability.</b>"));
+
+	dialog()->registerWidgetHelp(m_ui.eeSoftFloat, tr("EE Software Float"), tr("Unchecked"),
+		tr("Uses software emulation for all EE FPU floating-point operations."));
+	dialog()->registerWidgetHelp(m_ui.vu0SoftFloat, tr("VU0 Software Float"), tr("Unchecked"),
+		tr("Uses software emulation for all VU0 floating-point operations."));
+	dialog()->registerWidgetHelp(m_ui.vu1SoftFloat, tr("VU1 Software Float"), tr("Unchecked"),
+		tr("Uses software emulation for all VU1 floating-point operations."));
 
 	dialog()->registerWidgetHelp(m_ui.instantVU1, tr("Enable Instant VU1"), tr("Checked"),
 		tr("Runs VU1 instantly. Provides a modest speed improvement in most games. "
