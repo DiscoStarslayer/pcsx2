@@ -143,7 +143,7 @@ namespace x86Emitter
 		if (x86Emitter::use_avx)
 		{
 			EmitSimdOp(info, dst, src1, src2, 1);
-			xWrite8(src3.GetId());
+			xWrite8(src3.GetId() << 4);
 		}
 		else
 		{
@@ -161,7 +161,7 @@ namespace x86Emitter
 		if (x86Emitter::use_avx)
 		{
 			EmitSimdOp(info, dst, src1, src2, 1);
-			xWrite8(src3.GetId());
+			xWrite8(src3.GetId() << 4);
 		}
 		else
 		{
@@ -323,6 +323,16 @@ namespace x86Emitter
 		{SIMDInstructionInfo(0xf2).p66().i(), SIMDInstructionInfo(0x72, 6).p66().i()}, // D
 		{SIMDInstructionInfo(0xf3).p66().i(), SIMDInstructionInfo(0x73, 6).p66().i()}, // Q
 	};
+
+	void xVPSLLVD(const xRegisterSSE& dst, const xRegisterSSE& src, const xRegisterSSE& counts)
+	{
+		EmitVEX(SIMDInstructionInfo(0x47).p66().m0f38().i(), dst, src, counts);
+	}
+
+	void xVPSRLVD(const xRegisterSSE& dst, const xRegisterSSE& src, const xRegisterSSE& counts)
+	{
+		EmitVEX(SIMDInstructionInfo(0x45).p66().m0f38().i(), dst, src, counts);
+	}
 
 	const xImplSimd_AddSub xPADD =
 	{

@@ -1196,14 +1196,14 @@ const xRegister32
 	void xImpl_DwordShift::operator()(const xRegister16or32or64& to, const xRegister16or32or64& from, const xRegisterCL& /* clreg */) const
 	{
 		pxAssert(to->GetOperandSize() == from->GetOperandSize());
-		xOpWrite0F(from->GetPrefix16(), OpcodeBase + 1, to, from);
+		xOpWrite0F(from->GetPrefix16(), OpcodeBase + 1, from, to);
 	}
 
 	void xImpl_DwordShift::operator()(const xRegister16or32or64& to, const xRegister16or32or64& from, u8 shiftcnt) const
 	{
 		pxAssert(to->GetOperandSize() == from->GetOperandSize());
 		if (shiftcnt != 0)
-			xOpWrite0F(from->GetPrefix16(), OpcodeBase, to, from, shiftcnt);
+			xOpWrite0F(from->GetPrefix16(), OpcodeBase, from, to, shiftcnt);
 	}
 
 	void xImpl_DwordShift::operator()(const xIndirectVoid& dest, const xRegister16or32or64& from, const xRegisterCL& /* clreg */) const

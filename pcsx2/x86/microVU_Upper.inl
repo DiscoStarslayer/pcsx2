@@ -3,11 +3,26 @@
 
 #pragma once
 
+#include "GS/MultiISA.h"
+
+// Private ABI shared only by generated upper-FMAC kernels and their emitters.
+struct VuSoftFmacJitResult
+{
+	u32 value[4];
+	u32 mac_flags;
+	u32 status_flags; // Four-bit status nibble.
+	u32 mul_stage_status_flags; // Four-bit product-status nibble.
+	u32 sticky_status_flags; // OR of the two four-bit status nibbles.
+	u32 acc_overflow_mask;
+};
+static_assert(sizeof(VuSoftFmacJitResult) == 9 * sizeof(u32));
+static u32 s_vu_cop2_opm_old_mac;
+
 //------------------------------------------------------------------
 // mVUupdateFlags() - Updates status/mac flags
 //------------------------------------------------------------------
 
-#define AND_XYZW ((_XYZW_SS && modXYZW) ? (1) : (mFLAG.doFlag ? (_X_Y_Z_W) : (flipMask[_X_Y_Z_W])))
+#define AND_XYZW ((_XYZW_SS && modXYZW) ? (1) : (mFLAG.doFlag ? (_X_Y_Z_W) : (s_vu_soft_lane_mask[_X_Y_Z_W])))
 #define ADD_XYZW ((_XYZW_SS && modXYZW) ? (_X ? 3 : (_Y ? 2 : (_Z ? 1 : 0))) : 0)
 #define SHIFT_XYZW(gprReg) \
 	do { \
@@ -23,13 +38,52 @@ alignas(16) const u32 sse4_compvals[2][4] = {
 	{0x7fffffff, 0x7fffffff, 0x7fffffff, 0x7fffffff}, //1111
 };
 
+alignas(4) static constexpr u32 s_vu_soft_truncate_mxcsr = 0x7f80;
+alignas(4) static constexpr u32 s_vu_soft_truncate_daz_ftz_mxcsr = 0xffc0;
+alignas(16) static constexpr u32 s_vu_soft_zero[4] = {};
+alignas(16) static constexpr u32 s_vu_soft_one[4] = {1, 1, 1, 1};
+alignas(16) static constexpr u32 s_vu_soft_exp_24[4] = {24, 24, 24, 24};
+alignas(16) static constexpr u32 s_vu_soft_exp_33[4] = {33, 33, 33, 33};
+alignas(16) static constexpr u32 s_vu_soft_exp_255[4] = {255, 255, 255, 255};
+alignas(16) static constexpr u32 s_vu_soft_all_ones[4] = {0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff};
+alignas(16) static constexpr u32 s_vu_soft_sign[4] = {0x80000000, 0x80000000, 0x80000000, 0x80000000};
+alignas(16) static constexpr u32 s_vu_soft_abs[4] = {0x7fffffff, 0x7fffffff, 0x7fffffff, 0x7fffffff};
+alignas(16) static constexpr u32 s_vu_soft_max_finite[4] = {0x7f7fffff, 0x7f7fffff, 0x7f7fffff, 0x7f7fffff};
+alignas(16) static constexpr u32 s_vu_soft_max_safe[4] = {0x7f7ffffe, 0x7f7ffffe, 0x7f7ffffe, 0x7f7ffffe};
+alignas(16) static constexpr u32 s_vu_soft_safe_range_biased_max[4] = {0xfefffffe, 0xfefffffe, 0xfefffffe, 0xfefffffe};
+alignas(16) static constexpr u32 s_vu_soft_finite_range_biased_max[4] = {0xfeffffff, 0xfeffffff, 0xfeffffff, 0xfeffffff};
+alignas(16) static constexpr u32 s_vu_soft_exp_field[4] = {0x7f800000, 0x7f800000, 0x7f800000, 0x7f800000};
+alignas(16) static constexpr u32 s_vu_soft_exp_field_253[4] = {0x7e800000, 0x7e800000, 0x7e800000, 0x7e800000};
+alignas(16) static constexpr u32 s_vu_soft_exp_mask[4] = {0xff, 0xff, 0xff, 0xff};
+alignas(16) static constexpr u32 s_vu_soft_mantissa[4] = {0x7fffff, 0x7fffff, 0x7fffff, 0x7fffff};
+alignas(16) static constexpr u32 s_vu_soft_hidden_bit[4] = {0x800000, 0x800000, 0x800000, 0x800000};
+alignas(16) static constexpr u32 s_vu_soft_float_one[4] = {0x3f800000, 0x3f800000, 0x3f800000, 0x3f800000};
+alignas(16) static constexpr u32 s_vu_soft_borrow_limit[4] = {0x7fff, 0x7fff, 0x7fff, 0x7fff};
+alignas(16) static constexpr u8 s_vu_soft_lane_mask[16] = {0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15};
+alignas(16) static constexpr u8 s_vu_soft_booth_decode_bytes[16] = {0, 1, 1, 2, 0x12, 0x11, 0x11, 0};
+alignas(16) static constexpr u32 s_vu_soft_magnitude[4] = {7, 7, 7, 7};
+alignas(16) static constexpr u32 s_vu_soft_booth_magnitude[4] = {3, 3, 3, 3};
+alignas(16) static constexpr u32 s_vu_soft_bit_15[4] = {0x8000, 0x8000, 0x8000, 0x8000};
+alignas(16) static constexpr u32 s_vu_soft_bit_11[4] = {0x800, 0x800, 0x800, 0x800};
+alignas(16) static constexpr u32 s_vu_soft_bit_10[4] = {0x400, 0x400, 0x400, 0x400};
+alignas(16) static constexpr u32 s_vu_soft_low_11_mask[4] = {~0x7ffu, ~0x7ffu, ~0x7ffu, ~0x7ffu};
+alignas(16) static constexpr u32 s_vu_soft_low_12_mask[4] = {~0xfffu, ~0xfffu, ~0xfffu, ~0xfffu};
+alignas(16) static constexpr u32 s_vu_soft_low_15_mask[4] = {~0x7fffu, ~0x7fffu, ~0x7fffu, ~0x7fffu};
+alignas(16) static constexpr auto s_vu_soft_x86_lane_masks = [] {
+	std::array<std::array<u32, 4>, 16> masks = {};
+	for (u32 mask = 0; mask < masks.size(); mask++)
+	{
+		for (u32 lane = 0; lane < 4; lane++)
+			masks[mask][lane] = (mask & (1u << lane)) ? 0xffffffffu : 0;
+	}
+	return masks;
+}();
 // Note: If modXYZW is true, then it adjusts XYZW for Single Scalar operations
 static void mVUupdateFlags(mV, const xmm& reg, const xmm& regT1in = xEmptyReg, const xmm& regT2in = xEmptyReg, bool modXYZW = 1)
 {
 	const x32& mReg = gprT1;
 	const x32& sReg = getFlagReg(sFLAG.write);
 	bool regT1b = regT1in.IsEmpty(), regT2b = false;
-	static const u16 flipMask[16] = {0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15};
 
 	//SysPrintf("Status = %d; Mac = %d\n", sFLAG.doFlag, mFLAG.doFlag);
 	if (!sFLAG.doFlag && !mFLAG.doFlag)
@@ -74,10 +128,8 @@ static void mVUupdateFlags(mV, const xmm& reg, const xmm& regT1in = xEmptyReg, c
 	xOR(mReg, gprT2);
 
 	//-------------------------Overflow Flags-----------------------------------
-	// We can't really do this because of the limited range of x86 and the value MIGHT genuinely be FLT_MAX (x86)
-	// so this will need to remain as a gamefix for the one game that needs it (Superman Returns)
-	// until some sort of soft float implementation.
-	if (sFLAG.doFlag && CHECK_VUOVERFLOWHACK)
+	// Legacy fallback for paths which do not have software result classification.
+	if (sFLAG.doFlag && CHECK_VUOVERFLOWHACK && !CHECK_VU_SOFT(mVU.index))
 	{
 		//Calculate overflow
 		xAND.PS(regT1, regT2, ptr128[&sse4_compvals[1][0]]); // Remove sign flags (we don't care)
@@ -227,475 +279,39 @@ static void setupFtReg(microVU& mVU, xmm& Ft, xmm& tempFt, int opCase, int clamp
 	}
 }
 
-static bool mVUCanUseUpperSoftHelper(microVU& mVU, int opCase, int opType, bool isACC)
+static void mVUemitExtractLane(const x32& dst, const xmm& src, int lane)
 {
-	const int vuIndex = mVU.index;
-	if (vuIndex == 1 && !mVU1Stage1NativeAllowed)
-		return false;
-	if (opCase != 1 && opCase != 2 && opCase != 3 && !(opCase == 4 && opType == 2))
-		return false;
-	if (vuIndex == 1 && isACC && !IsVU1SoftNativeStageAllowed(5))
-		return false;
-	if (vuIndex == 1 && opCase == 1 && _X_Y_Z_W != 0xf && !IsVU1SoftNativeStageAllowed(2))
-		return false;
-	if (vuIndex == 1 && opCase == 2 && !IsVU1SoftNativeStageAllowed(3))
-		return false;
-	if (vuIndex == 1 && opCase == 3 && !IsVU1SoftNativeStageAllowed(4))
-		return false;
-	if (vuIndex == 1 && opCase == 4 && !IsVU1SoftNativeStageAllowed(6))
-		return false;
-	switch (opType)
-	{
-		case 0:
-		case 5:
-		case 1:
-			return CHECK_VU_SOFT_ADDSUB(vuIndex);
-		case 2:
-			return CHECK_VU_SOFT_MUL(vuIndex);
-		default:
-			return false;
-	}
-}
-
-static bool mVUCanUseUpperSoftHelperMulAdd(microVU& mVU, int opCase)
-{
-	const int vuIndex = mVU.index;
-	if (vuIndex == 1 && !mVU1Stage1NativeAllowed)
-		return false;
-	if (vuIndex == 1 && !IsVU1SoftNativeStageAllowed(5))
-		return false;
-	return (opCase == 1 || opCase == 2 || opCase == 3) && CHECK_VU_SOFT_ADDSUB(vuIndex) && CHECK_VU_SOFT_MUL(vuIndex);
-}
-
-static VuUpperFmacSoftOp mVUselectUpperSoftHelperOp(microVU& mVU, int opCase, int opType, bool isACC)
-{
-	static constexpr VuUpperFmacSoftOp add_ops[][7] = {
-		{VuUpperFmacSoftOp::ADD, VuUpperFmacSoftOp::ADDi, VuUpperFmacSoftOp::ADDq, VuUpperFmacSoftOp::ADDx, VuUpperFmacSoftOp::ADDy, VuUpperFmacSoftOp::ADDz, VuUpperFmacSoftOp::ADDw},
-		{VuUpperFmacSoftOp::ADDA, VuUpperFmacSoftOp::ADDAi, VuUpperFmacSoftOp::ADDAq, VuUpperFmacSoftOp::ADDAx, VuUpperFmacSoftOp::ADDAy, VuUpperFmacSoftOp::ADDAz, VuUpperFmacSoftOp::ADDAw},
-	};
-	static constexpr VuUpperFmacSoftOp sub_ops[][7] = {
-		{VuUpperFmacSoftOp::SUB, VuUpperFmacSoftOp::SUBi, VuUpperFmacSoftOp::SUBq, VuUpperFmacSoftOp::SUBx, VuUpperFmacSoftOp::SUBy, VuUpperFmacSoftOp::SUBz, VuUpperFmacSoftOp::SUBw},
-		{VuUpperFmacSoftOp::SUBA, VuUpperFmacSoftOp::SUBAi, VuUpperFmacSoftOp::SUBAq, VuUpperFmacSoftOp::SUBAx, VuUpperFmacSoftOp::SUBAy, VuUpperFmacSoftOp::SUBAz, VuUpperFmacSoftOp::SUBAw},
-	};
-	static constexpr VuUpperFmacSoftOp mul_ops[][7] = {
-		{VuUpperFmacSoftOp::MUL, VuUpperFmacSoftOp::MULi, VuUpperFmacSoftOp::MULq, VuUpperFmacSoftOp::MULx, VuUpperFmacSoftOp::MULy, VuUpperFmacSoftOp::MULz, VuUpperFmacSoftOp::MULw},
-		{VuUpperFmacSoftOp::MULA, VuUpperFmacSoftOp::MULAi, VuUpperFmacSoftOp::MULAq, VuUpperFmacSoftOp::MULAx, VuUpperFmacSoftOp::MULAy, VuUpperFmacSoftOp::MULAz, VuUpperFmacSoftOp::MULAw},
-	};
-
-	const int variant = (opCase == 3) ? 1 : (opCase == 4) ? 2 : (opCase == 2) ? (3 + _bc_) : 0;
-	const int dst = isACC ? 1 : 0;
-	return (opType == 0 || opType == 5) ? add_ops[dst][variant] : (opType == 1) ? sub_ops[dst][variant] : mul_ops[dst][variant];
-}
-
-static VuUpperFmacSoftOp mVUselectUpperSoftHelperMulAddOp(microVU& mVU, int opCase, VuUpperFmacSoftOp normal, VuUpperFmacSoftOp immediate, VuUpperFmacSoftOp q, VuUpperFmacSoftOp x)
-{
-	if (opCase == 3)
-		return immediate;
-	if (opCase == 4)
-		return q;
-	if (opCase == 2)
-		return static_cast<VuUpperFmacSoftOp>(static_cast<u32>(x) + _bc_);
-	return normal;
-}
-
-static bool mVUupperSoftHelperReadsQ(VuUpperFmacSoftOp op)
-{
-			switch (op)
-		{
-		case VuUpperFmacSoftOp::ADDq:
-		case VuUpperFmacSoftOp::SUBq:
-		case VuUpperFmacSoftOp::MULq:
-		case VuUpperFmacSoftOp::ADDAq:
-		case VuUpperFmacSoftOp::SUBAq:
-		case VuUpperFmacSoftOp::MULAq:
-		case VuUpperFmacSoftOp::MADDq:
-		case VuUpperFmacSoftOp::MADDAq:
-		case VuUpperFmacSoftOp::MSUBq:
-		case VuUpperFmacSoftOp::MSUBAq:
-			return true;
-		default:
-			return false;
-	}
-}
-
-static void mVUemitUpperSoftHelperCall(microVU& mVU, VuUpperFmacSoftOp op, bool import_flags = true)
-{
-	static constexpr u32 VU_FMAC_STICKY_SOURCE_VALID = 1u << 20;
-	static constexpr u32 VU_FMAC_NATIVE_PRODUCT_UNDERFLOW = 1u << 21;
-	void* direct_full_helper = nullptr;
-	switch (op)
-	{
-			case VuUpperFmacSoftOp::ADD:
-				if (_X_Y_Z_W == 0xf)
-					direct_full_helper = (void*)vuUpperFmacSoftAddFull;
-				else
-					direct_full_helper = (void*)vuUpperFmacSoftAddMasked;
-				break;
-			case VuUpperFmacSoftOp::ADDi:
-				direct_full_helper = (void*)vuUpperFmacSoftAddI;
-				break;
-			case VuUpperFmacSoftOp::ADDq:
-				direct_full_helper = (void*)vuUpperFmacSoftAddQ;
-				break;
-			case VuUpperFmacSoftOp::SUB:
-				if (_X_Y_Z_W == 0xf)
-					direct_full_helper = (void*)vuUpperFmacSoftSubFull;
-				else
-					direct_full_helper = (void*)vuUpperFmacSoftSubMasked;
-				break;
-			case VuUpperFmacSoftOp::SUBi:
-				direct_full_helper = (void*)vuUpperFmacSoftSubI;
-				break;
-			case VuUpperFmacSoftOp::SUBq:
-				direct_full_helper = (void*)vuUpperFmacSoftSubQ;
-				break;
-			case VuUpperFmacSoftOp::MUL:
-				if (_X_Y_Z_W == 0xf)
-					direct_full_helper = (void*)vuUpperFmacSoftMulFull;
-				else
-					direct_full_helper = (void*)vuUpperFmacSoftMulMasked;
-				break;
-			case VuUpperFmacSoftOp::MULi:
-				direct_full_helper = (void*)vuUpperFmacSoftMulI;
-				break;
-			case VuUpperFmacSoftOp::MULq:
-				direct_full_helper = (void*)vuUpperFmacSoftMulQ;
-				break;
-			case VuUpperFmacSoftOp::ADDx:
-				direct_full_helper = (void*)vuUpperFmacSoftAddX;
-				break;
-			case VuUpperFmacSoftOp::ADDy:
-				direct_full_helper = (void*)vuUpperFmacSoftAddY;
-				break;
-			case VuUpperFmacSoftOp::ADDz:
-				direct_full_helper = (void*)vuUpperFmacSoftAddZ;
-				break;
-			case VuUpperFmacSoftOp::ADDw:
-				direct_full_helper = (void*)vuUpperFmacSoftAddW;
-				break;
-			case VuUpperFmacSoftOp::SUBx:
-				direct_full_helper = (void*)vuUpperFmacSoftSubX;
-				break;
-			case VuUpperFmacSoftOp::SUBy:
-				direct_full_helper = (void*)vuUpperFmacSoftSubY;
-				break;
-			case VuUpperFmacSoftOp::SUBz:
-				direct_full_helper = (void*)vuUpperFmacSoftSubZ;
-				break;
-			case VuUpperFmacSoftOp::SUBw:
-				direct_full_helper = (void*)vuUpperFmacSoftSubW;
-				break;
-			case VuUpperFmacSoftOp::MULx:
-				direct_full_helper = (void*)vuUpperFmacSoftMulX;
-				break;
-			case VuUpperFmacSoftOp::MULy:
-				direct_full_helper = (void*)vuUpperFmacSoftMulY;
-				break;
-			case VuUpperFmacSoftOp::MULz:
-				direct_full_helper = (void*)vuUpperFmacSoftMulZ;
-				break;
-			case VuUpperFmacSoftOp::MULw:
-				direct_full_helper = (void*)vuUpperFmacSoftMulW;
-				break;
-			case VuUpperFmacSoftOp::ADDA:
-				direct_full_helper = (void*)vuUpperFmacSoftAddAccFull;
-				break;
-			case VuUpperFmacSoftOp::ADDAi:
-				direct_full_helper = (void*)vuUpperFmacSoftAddAccI;
-				break;
-			case VuUpperFmacSoftOp::ADDAq:
-				direct_full_helper = (void*)vuUpperFmacSoftAddAccQ;
-				break;
-			case VuUpperFmacSoftOp::SUBA:
-				direct_full_helper = (void*)vuUpperFmacSoftSubAccFull;
-				break;
-			case VuUpperFmacSoftOp::SUBAi:
-				direct_full_helper = (void*)vuUpperFmacSoftSubAccI;
-				break;
-			case VuUpperFmacSoftOp::SUBAq:
-				direct_full_helper = (void*)vuUpperFmacSoftSubAccQ;
-				break;
-			case VuUpperFmacSoftOp::MULA:
-				direct_full_helper = (void*)vuUpperFmacSoftMulAccFull;
-				break;
-			case VuUpperFmacSoftOp::MULAi:
-				direct_full_helper = (void*)vuUpperFmacSoftMulAccI;
-				break;
-			case VuUpperFmacSoftOp::MULAq:
-				direct_full_helper = (void*)vuUpperFmacSoftMulAccQ;
-				break;
-			case VuUpperFmacSoftOp::ADDAx:
-				direct_full_helper = (void*)vuUpperFmacSoftAddAccX;
-				break;
-			case VuUpperFmacSoftOp::ADDAy:
-				direct_full_helper = (void*)vuUpperFmacSoftAddAccY;
-				break;
-			case VuUpperFmacSoftOp::ADDAz:
-				direct_full_helper = (void*)vuUpperFmacSoftAddAccZ;
-				break;
-			case VuUpperFmacSoftOp::ADDAw:
-				direct_full_helper = (void*)vuUpperFmacSoftAddAccW;
-				break;
-			case VuUpperFmacSoftOp::SUBAx:
-				direct_full_helper = (void*)vuUpperFmacSoftSubAccX;
-				break;
-			case VuUpperFmacSoftOp::SUBAy:
-				direct_full_helper = (void*)vuUpperFmacSoftSubAccY;
-				break;
-			case VuUpperFmacSoftOp::SUBAz:
-				direct_full_helper = (void*)vuUpperFmacSoftSubAccZ;
-				break;
-			case VuUpperFmacSoftOp::SUBAw:
-				direct_full_helper = (void*)vuUpperFmacSoftSubAccW;
-				break;
-			case VuUpperFmacSoftOp::MULAx:
-				direct_full_helper = (void*)vuUpperFmacSoftMulAccX;
-				break;
-			case VuUpperFmacSoftOp::MULAy:
-				direct_full_helper = (void*)vuUpperFmacSoftMulAccY;
-				break;
-			case VuUpperFmacSoftOp::MULAz:
-				direct_full_helper = (void*)vuUpperFmacSoftMulAccZ;
-				break;
-			case VuUpperFmacSoftOp::MULAw:
-				direct_full_helper = (void*)vuUpperFmacSoftMulAccW;
-				break;
-			case VuUpperFmacSoftOp::MADD:
-				direct_full_helper = (void*)vuUpperFmacSoftMaddFull;
-				break;
-			case VuUpperFmacSoftOp::MADDi:
-				direct_full_helper = (void*)vuUpperFmacSoftMaddI;
-				break;
-			case VuUpperFmacSoftOp::MADDq:
-				direct_full_helper = (void*)vuUpperFmacSoftMaddQ;
-				break;
-			case VuUpperFmacSoftOp::MADDx:
-				direct_full_helper = (void*)vuUpperFmacSoftMaddX;
-				break;
-			case VuUpperFmacSoftOp::MADDy:
-				direct_full_helper = (void*)vuUpperFmacSoftMaddY;
-				break;
-			case VuUpperFmacSoftOp::MADDz:
-				direct_full_helper = (void*)vuUpperFmacSoftMaddZ;
-				break;
-			case VuUpperFmacSoftOp::MADDw:
-				direct_full_helper = (void*)vuUpperFmacSoftMaddW;
-				break;
-			case VuUpperFmacSoftOp::MADDA:
-				direct_full_helper = (void*)vuUpperFmacSoftMaddaFull;
-				break;
-			case VuUpperFmacSoftOp::MADDAi:
-				direct_full_helper = (void*)vuUpperFmacSoftMaddaI;
-				break;
-			case VuUpperFmacSoftOp::MADDAq:
-				direct_full_helper = (void*)vuUpperFmacSoftMaddaQ;
-				break;
-			case VuUpperFmacSoftOp::MADDAx:
-				direct_full_helper = (void*)vuUpperFmacSoftMaddaX;
-				break;
-			case VuUpperFmacSoftOp::MADDAy:
-				direct_full_helper = (void*)vuUpperFmacSoftMaddaY;
-				break;
-			case VuUpperFmacSoftOp::MADDAz:
-				direct_full_helper = (void*)vuUpperFmacSoftMaddaZ;
-				break;
-			case VuUpperFmacSoftOp::MADDAw:
-				direct_full_helper = (void*)vuUpperFmacSoftMaddaW;
-				break;
-			case VuUpperFmacSoftOp::MSUB:
-				direct_full_helper = (void*)vuUpperFmacSoftMsubFull;
-				break;
-			case VuUpperFmacSoftOp::MSUBi:
-				direct_full_helper = (void*)vuUpperFmacSoftMsubI;
-				break;
-			case VuUpperFmacSoftOp::MSUBq:
-				direct_full_helper = (void*)vuUpperFmacSoftMsubQ;
-				break;
-			case VuUpperFmacSoftOp::MSUBx:
-				direct_full_helper = (void*)vuUpperFmacSoftMsubX;
-				break;
-			case VuUpperFmacSoftOp::MSUBy:
-				direct_full_helper = (void*)vuUpperFmacSoftMsubY;
-				break;
-			case VuUpperFmacSoftOp::MSUBz:
-				direct_full_helper = (void*)vuUpperFmacSoftMsubZ;
-				break;
-			case VuUpperFmacSoftOp::MSUBw:
-				direct_full_helper = (void*)vuUpperFmacSoftMsubW;
-				break;
-			case VuUpperFmacSoftOp::MSUBA:
-				direct_full_helper = (void*)vuUpperFmacSoftMsubaFull;
-				break;
-			case VuUpperFmacSoftOp::MSUBAi:
-				direct_full_helper = (void*)vuUpperFmacSoftMsubaI;
-				break;
-			case VuUpperFmacSoftOp::MSUBAq:
-				direct_full_helper = (void*)vuUpperFmacSoftMsubaQ;
-				break;
-			case VuUpperFmacSoftOp::MSUBAx:
-				direct_full_helper = (void*)vuUpperFmacSoftMsubaX;
-				break;
-			case VuUpperFmacSoftOp::MSUBAy:
-				direct_full_helper = (void*)vuUpperFmacSoftMsubaY;
-				break;
-			case VuUpperFmacSoftOp::MSUBAz:
-				direct_full_helper = (void*)vuUpperFmacSoftMsubaZ;
-				break;
-			case VuUpperFmacSoftOp::MSUBAw:
-				direct_full_helper = (void*)vuUpperFmacSoftMsubaW;
-				break;
-			default:
-				break;
-	}
-
-	mVU.regAlloc->flushAll();
-
-	mVUallocSFLAGc(gprT1, gprT2, sFLAG.lastWrite);
-	xOR(gprT1, ptr32[&mVU.regs().VI[REG_STATUS_FLAG].UL]);
-	xMOV(ptr32[&mVU.regs().statusflag], gprT1);
-	xMOV(ptr32[&mVU.regs().VI[REG_STATUS_FLAG].UL], gprT1);
-	mVUallocMFLAGa(mVU, gprT1, mFLAG.lastWrite);
-	xMOV(ptr32[&mVU.regs().macflag], gprT1);
-	xMOV(ptr32[&mVU.regs().code], mVU.code);
-	if (mVUupperSoftHelperReadsQ(op))
-	{
-		getQreg(xmmT1, mVUinfo.readQ);
-		xMOVSS(ptr32[&mVU.regs().VI[REG_Q].UL], xmmT1);
-	}
-
-	mVUbackupRegs(mVU, true, false);
-	xLoadFarAddr(arg1reg, &mVU.regs());
-	if (direct_full_helper)
-	{
-		xFastCall(direct_full_helper, arg1reg);
-	}
+	if (lane == 0)
+		xMOVD(dst, src);
 	else
-	{
-		xMOV(arg2regd, static_cast<u32>(op));
-		xFastCall((void*)vuUpperFmacSoftNativeBridge, arg1reg, arg2reg);
-	}
-	mVUrestoreRegs(mVU, true, false);
-	if (!import_flags)
-		return;
-	if (op == VuUpperFmacSoftOp::MADD || op == VuUpperFmacSoftOp::MSUB)
-		xOR(ptr32[&mVU.regs().statusflag], VU_FMAC_NATIVE_PRODUCT_UNDERFLOW);
-	if (op == VuUpperFmacSoftOp::ADDi || op == VuUpperFmacSoftOp::SUBi || op == VuUpperFmacSoftOp::MULi)
-	{
-		xAND(ptr32[&mVU.regs().statusflag], 0xffe0fcff);
-		xAND(ptr32[&mVU.regs().VI[REG_STATUS_FLAG].UL], 0xfffffcff);
-		mVUallocSFLAGc(gprT1, gprT2, sFLAG.lastWrite);
-		xAND(gprT1, 0xc0);
-		xOR(ptr32[&mVU.regs().statusflag], gprT1);
-		xOR(ptr32[&mVU.regs().VI[REG_STATUS_FLAG].UL], gprT1);
-		xOR(ptr32[&mVU.regs().statusflag], 0xc0);
-		xOR(ptr32[&mVU.regs().VI[REG_STATUS_FLAG].UL], 0xc0);
-	}
-	if (op >= VuUpperFmacSoftOp::MADD && op <= VuUpperFmacSoftOp::MSUBAw)
-	{
-		mVUallocSFLAGc(gprT1, gprT2, sFLAG.lastWrite);
-		xAND(gprT1, 0x3c0);
-		xOR(ptr32[&mVU.regs().statusflag], gprT1);
-		xOR(ptr32[&mVU.regs().VI[REG_STATUS_FLAG].UL], gprT1);
-	}
-	xMOV(gprT1, ptr32[&mVU.regs().statusflag]);
-	xTEST(gprT1, VU_FMAC_STICKY_SOURCE_VALID);
-	xForwardJZ8 use_helper_vi_status;
-	xMOV(gprT2, gprT1);
-	xSHR(gprT2, 10);
-	xAND(gprT2, 0x3c0);
-	xAND(gprT1, 0xfcf);
-	xOR(gprT1, gprT2);
-	xMOV(ptr32[&mVU.regs().VI[REG_STATUS_FLAG].UL], gprT1);
-	xForwardJump8 keep_helper_status;
-	use_helper_vi_status.SetTarget();
-	xMOV(ptr32[&mVU.regs().VI[REG_STATUS_FLAG].UL], gprT1);
-	keep_helper_status.SetTarget();
-	if (op == VuUpperFmacSoftOp::ADDi || op == VuUpperFmacSoftOp::SUBi || op == VuUpperFmacSoftOp::MULi)
-	{
-		xAND(ptr32[&mVU.regs().statusflag], 0xffe0fcff);
-		xAND(ptr32[&mVU.regs().VI[REG_STATUS_FLAG].UL], 0xfffffcff);
-		mVUallocSFLAGc(gprT1, gprT2, sFLAG.lastWrite);
-		xAND(gprT1, 0xc0);
-		xOR(ptr32[&mVU.regs().statusflag], gprT1);
-		xOR(ptr32[&mVU.regs().VI[REG_STATUS_FLAG].UL], gprT1);
-	}
-	xMOV(gprT1, ptr32[&mVU.regs().macflag]);
-	xMOV(ptr32[&mVU.regs().VI[REG_MAC_FLAG].UL], gprT1);
-
-	if (mFLAG.doFlag)
-	{
-		xMOV(gprT1, ptr32[&mVU.regs().macflag]);
-		mVUallocMFLAGb(mVU, gprT1, mFLAG.write);
-	}
-	if (sFLAG.doFlag)
-	{
-		xMOV(gprT1, ptr32[&mVU.regs().statusflag]);
-		xTEST(gprT1, VU_FMAC_STICKY_SOURCE_VALID);
-		xForwardJZ8 use_visible_status;
-		mVUallocSFLAGd(&mVU.regs().VI[REG_STATUS_FLAG].UL, gprT1, gprT2);
-		xForwardJump8 status_done;
-		use_visible_status.SetTarget();
-		mVUallocSFLAGd(&mVU.regs().VI[REG_STATUS_FLAG].UL, gprT1, gprT2);
-		status_done.SetTarget();
-		mVUallocSFLAGb(gprT1, sFLAG.write);
-		if (op == VuUpperFmacSoftOp::MADD || op == VuUpperFmacSoftOp::MSUB)
-		{
-			xOR(getFlagReg((sFLAG.write + 1) & 3), 0x0400000);
-			xOR(getFlagReg((sFLAG.write + 2) & 3), 0x0400000);
-			xOR(getFlagReg((sFLAG.write + 3) & 3), 0x0400000);
-		}
-	}
+		xPEXTR.D(dst, src, lane);
 }
 
-static bool mVUupperSoftHelperWritesACC(VuUpperFmacSoftOp op)
-{
-	const u32 value = static_cast<u32>(op);
-	const auto between = [](u32 x, VuUpperFmacSoftOp first, VuUpperFmacSoftOp last) {
-		return x >= static_cast<u32>(first) && x <= static_cast<u32>(last);
-	};
-
-	return between(value, VuUpperFmacSoftOp::ADDA, VuUpperFmacSoftOp::MULAw) ||
-		between(value, VuUpperFmacSoftOp::MADDA, VuUpperFmacSoftOp::MADDAw) ||
-		between(value, VuUpperFmacSoftOp::MSUBA, VuUpperFmacSoftOp::MSUBAw);
-}
-
-static bool mVUupperSoftHelperNeedsMaskedAccFlagFixup(microVU& mVU, VuUpperFmacSoftOp op)
-{
-	return _X_Y_Z_W != 0xf && mVUupperSoftHelperWritesACC(op);
-}
-
-static void mVUemitUpperSoftHelperMaskedAccFlagFixup(microVU& mVU)
-{
-	const xmm& acc = mVU.regAlloc->allocReg(32, 0, 0xf);
-
-	if (_XYZW_SS2)
-	{
-		const xmm& acc_for_flags = mVU.regAlloc->allocReg();
-		xPSHUF.D(acc_for_flags, acc, shuffleSS(_X_Y_Z_W));
-		mVUupdateFlags(mVU, acc_for_flags);
-		mVU.regAlloc->clearNeeded(acc_for_flags);
-	}
-	else
-	{
-		mVUupdateFlags(mVU, acc);
-	}
-
-	mVU.regAlloc->clearNeeded(acc);
-}
+#include "microVU_UpperSoft.inl"
 
 // Normal FMAC Opcodes
 static void mVU_FMACa(microVU& mVU, int recPass, int opCase, int opType, bool isACC, microOpcode opEnum, int clampType)
 {
-	pass1 { setupPass1(mVU, opCase, isACC, ((opType == 3) || (opType == 4))); }
+	pass1
+	{
+		setupPass1(mVU, opCase, isACC, ((opType == 3) || (opType == 4)));
+	}
 	pass2
 	{
-		if (mVUCanUseUpperSoftHelper(mVU, opCase, opType, isACC))
+		const VuUpperFmacSoftKind soft_kind = (opType == 0 || opType == 5) ? VuUpperFmacSoftKind::Add :
+			(opType == 1) ? VuUpperFmacSoftKind::Sub : VuUpperFmacSoftKind::Mul;
+		const VuUpperFmacSoftDestination soft_destination = isACC ?
+			VuUpperFmacSoftDestination::Acc : VuUpperFmacSoftDestination::Fd;
+		const VuUpperFmacSoftDescriptor soft_op = mVUmakeUpperSoftDescriptor(mVU, opCase, soft_kind, soft_destination);
+		const bool soft_candidate = opType == 0 || opType == 1 || opType == 2 || opType == 5;
+		if (soft_candidate && CHECK_VU_SOFT(mVU.index))
 		{
-			const VuUpperFmacSoftOp soft_op = mVUselectUpperSoftHelperOp(mVU, opCase, opType, isACC);
-			const bool masked_acc_flag_fixup = mVUupperSoftHelperNeedsMaskedAccFlagFixup(mVU, soft_op);
-			mVUemitUpperSoftHelperCall(mVU, soft_op, !masked_acc_flag_fixup);
-			if (masked_acc_flag_fixup)
-				mVUemitUpperSoftHelperMaskedAccFlagFixup(mVU);
+			if (isACC && opType == 2 && mVUtryStartUpperSoftRegisterDotFusion(mVU, soft_op))
+			{
+				mVU.profiler.EmitOp(opEnum);
+				return;
+			}
+			mVUemitUpperSoftExact(mVU, soft_op);
 			mVU.profiler.EmitOp(opEnum);
 			return;
 		}
@@ -753,22 +369,26 @@ static void mVU_FMACa(microVU& mVU, int recPass, int opCase, int opType, bool is
 // MADDA/MSUBA Opcodes
 static void mVU_FMACb(microVU& mVU, int recPass, int opCase, int opType, microOpcode opEnum, int clampType)
 {
-	pass1 { setupPass1(mVU, opCase, true, false); }
+	pass1
+	{
+		setupPass1(mVU, opCase, true, false);
+	}
 	pass2
 	{
-		if (mVUCanUseUpperSoftHelperMulAdd(mVU, opCase))
+		const VuUpperFmacSoftKind soft_kind = opType == 0 ? VuUpperFmacSoftKind::Madd : VuUpperFmacSoftKind::Msub;
+		const VuUpperFmacSoftDescriptor soft_op = mVUmakeUpperSoftDescriptor(
+			mVU, opCase, soft_kind, VuUpperFmacSoftDestination::Acc);
+		if (CHECK_VU_SOFT(mVU.index))
 		{
-			const VuUpperFmacSoftOp soft_op = opType == 0 ?
-				mVUselectUpperSoftHelperMulAddOp(mVU, opCase, VuUpperFmacSoftOp::MADDA, VuUpperFmacSoftOp::MADDAi, VuUpperFmacSoftOp::MADDAq, VuUpperFmacSoftOp::MADDAx) :
-				mVUselectUpperSoftHelperMulAddOp(mVU, opCase, VuUpperFmacSoftOp::MSUBA, VuUpperFmacSoftOp::MSUBAi, VuUpperFmacSoftOp::MSUBAq, VuUpperFmacSoftOp::MSUBAx);
-			const bool masked_acc_flag_fixup = mVUupperSoftHelperNeedsMaskedAccFlagFixup(mVU, soft_op);
-			mVUemitUpperSoftHelperCall(mVU, soft_op, !masked_acc_flag_fixup);
-			if (masked_acc_flag_fixup)
-				mVUemitUpperSoftHelperMaskedAccFlagFixup(mVU);
+			if (mVUisUpperSoftRegisterDotFusionContinuation(mVU, soft_op))
+			{
+				mVU.profiler.EmitOp(opEnum);
+				return;
+			}
+			mVUemitUpperSoftExact(mVU, soft_op);
 			mVU.profiler.EmitOp(opEnum);
 			return;
 		}
-
 		xmm Fs, Ft, ACC, tempFt;
 		setupFtReg(mVU, Ft, tempFt, opCase, clampType);
 
@@ -814,12 +434,22 @@ static void mVU_FMACb(microVU& mVU, int recPass, int opCase, int opType, microOp
 // MADD Opcodes
 static void mVU_FMACc(microVU& mVU, int recPass, int opCase, microOpcode opEnum, int clampType)
 {
-	pass1 { setupPass1(mVU, opCase, false, false); }
+	pass1
+	{
+		setupPass1(mVU, opCase, false, false);
+	}
 	pass2
 	{
-		if (mVUCanUseUpperSoftHelperMulAdd(mVU, opCase))
+		const VuUpperFmacSoftDescriptor soft_op = mVUmakeUpperSoftDescriptor(
+			mVU, opCase, VuUpperFmacSoftKind::Madd, VuUpperFmacSoftDestination::Fd);
+		if (CHECK_VU_SOFT(mVU.index))
 		{
-			mVUemitUpperSoftHelperCall(mVU, mVUselectUpperSoftHelperMulAddOp(mVU, opCase, VuUpperFmacSoftOp::MADD, VuUpperFmacSoftOp::MADDi, VuUpperFmacSoftOp::MADDq, VuUpperFmacSoftOp::MADDx));
+			if (mVUisUpperSoftRegisterDotFusionContinuation(mVU, soft_op))
+			{
+				mVU.profiler.EmitOp(opEnum);
+				return;
+			}
+			mVUemitUpperSoftExact(mVU, soft_op);
 			mVU.profiler.EmitOp(opEnum);
 			return;
 		}
@@ -858,12 +488,17 @@ static void mVU_FMACc(microVU& mVU, int recPass, int opCase, microOpcode opEnum,
 // MSUB Opcodes
 static void mVU_FMACd(microVU& mVU, int recPass, int opCase, microOpcode opEnum, int clampType)
 {
-	pass1 { setupPass1(mVU, opCase, false, false); }
+	pass1
+	{
+		setupPass1(mVU, opCase, false, false);
+	}
 	pass2
 	{
-		if (mVUCanUseUpperSoftHelperMulAdd(mVU, opCase))
+		const VuUpperFmacSoftDescriptor soft_op = mVUmakeUpperSoftDescriptor(
+			mVU, opCase, VuUpperFmacSoftKind::Msub, VuUpperFmacSoftDestination::Fd);
+		if (CHECK_VU_SOFT(mVU.index))
 		{
-			mVUemitUpperSoftHelperCall(mVU, mVUselectUpperSoftHelperMulAddOp(mVU, opCase, VuUpperFmacSoftOp::MSUB, VuUpperFmacSoftOp::MSUBi, VuUpperFmacSoftOp::MSUBq, VuUpperFmacSoftOp::MSUBx));
+			mVUemitUpperSoftExact(mVU, soft_op);
 			mVU.profiler.EmitOp(opEnum);
 			return;
 		}
@@ -915,9 +550,44 @@ mVUop(mVU_ABS)
 // OPMULA Opcode
 mVUop(mVU_OPMULA)
 {
-	pass1 { mVUanalyzeFMAC1(mVU, 0, _Fs_, _Ft_); }
+	pass1
+	{
+		mVUanalyzeFMAC1(mVU, 0, _Fs_, _Ft_);
+		if (CHECK_VU_SOFT(mVU.index))
+		{
+			// OPMULA's destination is ACC, but its status side effects are still
+			// observable by same-cycle FSAND and by a following OPMSUB. Keep that
+			// value live when the exact soft-float path is selected.
+			sFLAG.doNonSticky = true;
+			sFLAG.doValue = true;
+		}
+	}
 	pass2
 	{
+		if (CHECK_VU_SOFT(mVU.index))
+		{
+			mVU.regAlloc->flushCallerSavedGPRs();
+			if (mVU.cop2)
+			{
+				xMOV(gprT1, ptr32[&mVU.regs().VI[REG_MAC_FLAG].UL]);
+				xMOV(ptr32[&s_vu_cop2_opm_old_mac], gprT1);
+			}
+			const xmm& source = mVU.regAlloc->allocReg(_Fs_, 0, 0xf);
+			const xmm& operand = mVU.regAlloc->allocReg(_Ft_, 0, 0xf);
+			xPSHUF.D(source, source, 0xC9); // WXZY
+			xPSHUF.D(operand, operand, 0xD2); // WYXZ
+			const xmm& destination = mVU.regAlloc->allocReg(32, 32, _X_Y_Z_W);
+			const VuUpperFmacSoftDescriptor soft_op = {
+				VuUpperFmacSoftKind::Mul, VuUpperFmacSoftOperandSource::Ft, VuUpperFmacSoftDestination::Acc};
+			// OPMULA preserves inactive W separately. Its active XYZ exception bits
+			// must come from the exact product, because reconstructing flags from the
+			// final ACC value cannot distinguish an underflowed result from zero.
+			const VuSoftDelayedSFlagSource delayed_sflag_source = VuSoftDelayedSFlagSource::ResultStatus;
+			mVUemitUpperInlineMulExactResult(mVU, soft_op, delayed_sflag_source,
+				source, operand, destination, true, true);
+			mVU.profiler.EmitOp(opOPMULA);
+			return;
+		}
 		const xmm& Ft = mVU.regAlloc->allocReg(_Ft_, 0, _X_Y_Z_W);
 		const xmm& Fs = mVU.regAlloc->allocReg(_Fs_, 32, _X_Y_Z_W);
 
@@ -941,9 +611,37 @@ mVUop(mVU_OPMULA)
 // OPMSUB Opcode
 mVUop(mVU_OPMSUB)
 {
-	pass1 { mVUanalyzeFMAC1(mVU, _Fd_, _Fs_, _Ft_); }
+	pass1
+	{
+		mVUanalyzeFMAC1(mVU, _Fd_, _Fs_, _Ft_);
+	}
 	pass2
 	{
+		if (CHECK_VU_SOFT(mVU.index))
+		{
+			mVU.regAlloc->flushCallerSavedGPRs();
+			if (mVU.cop2)
+			{
+				xMOV(gprT1, ptr32[&mVU.regs().VI[REG_MAC_FLAG].UL]);
+				xMOV(ptr32[&s_vu_cop2_opm_old_mac], gprT1);
+			}
+			const xmm& source = mVU.regAlloc->allocReg(_Fs_, 0, 0xf);
+			const xmm& operand = mVU.regAlloc->allocReg(_Ft_, 0, 0xf);
+			xPSHUF.D(source, source, 0xC9); // WXZY
+			xPSHUF.D(operand, operand, 0xD2); // WYXZ
+			const xmm& accumulator = mVU.regAlloc->allocReg(32);
+			const int destination_load = _X_Y_Z_W == 0xf ? -1 : _Fd_;
+			const xmm& destination = mVU.regAlloc->allocReg(destination_load, _Fd_, _X_Y_Z_W);
+			const VuUpperFmacSoftDescriptor soft_op = {
+				VuUpperFmacSoftKind::Msub, VuUpperFmacSoftOperandSource::Ft, VuUpperFmacSoftDestination::Fd};
+			const VuSoftDelayedSFlagSource delayed_sflag_source =
+				mVUselectUpperSoftDelayedSFlagSource(mVU, soft_op);
+			mVUemitUpperInlineMaddExactResult(mVU, soft_op, delayed_sflag_source,
+				source, operand, accumulator, destination, true, false, false, false, false, true);
+			mVU.profiler.EmitOp(opOPMSUB);
+			return;
+		}
+
 		const xmm& Ft = mVU.regAlloc->allocReg(_Ft_, 0, 0xf);
 		const xmm& Fs = mVU.regAlloc->allocReg(_Fs_, 0, 0xf);
 		const xmm& ACC = mVU.regAlloc->allocReg(32, _Fd_, _X_Y_Z_W);

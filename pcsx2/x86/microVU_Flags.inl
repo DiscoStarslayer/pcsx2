@@ -26,6 +26,7 @@ __fi void mVUstatusFlagOp(mV)
 	if (sFLAG.doFlag)
 	{
 		sFLAG.doNonSticky = true;
+		sFLAG.doValue = true;
 	}
 	else
 	{
@@ -40,6 +41,7 @@ __fi void mVUstatusFlagOp(mV)
 			else if (sFLAG.doFlag)
 			{
 				sFLAG.doNonSticky = true;
+				sFLAG.doValue = true;
 				break;
 			}
 		}
@@ -125,6 +127,7 @@ __fi void mVUsetFlags(mV, microFlagCycles& mFC)
 			if (__Status)
 			{
 				sFLAG.doNonSticky = true;
+				sFLAG.doValue = true;
 				//writeProtect = true;
 			}
 
@@ -207,12 +210,15 @@ __fi void mVUsetFlags(mV, microFlagCycles& mFC)
 		{
 			sFLAG.doFlag = false;
 		}
+		if (sFLAG.doFlag && (!mVUsFlagHack || mVUinfo.doDivFlag))
+			sFLAG.doValue = true;
 
 		if (sFLAG.doFlag)
 		{
 			if (noFlagOpts)
 			{
 				sFLAG.doNonSticky = true;
+				sFLAG.doValue = true;
 				mFLAG.doFlag = true;
 			}
 		}

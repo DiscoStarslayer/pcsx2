@@ -264,6 +264,12 @@ struct Gif_Path
 	s32 getReadAmount() { return readAmount.load(std::memory_order_acquire) + gsPack.readAmount; }
 	bool hasDataRemaining() const { return curOffset < curSize; }
 	bool isDone() const { return isMTVU() ? !mtvu.fakePackets : (!hasDataRemaining() && (state == GIF_PATH_IDLE || state == GIF_PATH_WAIT)); }
+	bool canAdvancePacket() const
+	{
+		if (!gifTag.isValid)
+			return curOffset + 16 <= curSize;
+		return curOffset + (gifTag.hasAD ? 16 : gifTag.len) <= curSize;
+	}
 
 	// Waits on the MTGS to process gs packets
 	void mtgsReadWait()
@@ -346,6 +352,8 @@ struct Gif_Path
 		pxAssert(!isMTVU());
 		for (;;)
 		{
+			if (gifTag.isValid && !canAdvancePacket())
+				return gsPack;
 			if (!gifTag.isValid)
 			{ // Need new Gif Tag
 				// We don't have enough data for a Gif Tag
@@ -366,16 +374,14 @@ struct Gif_Path
 
 				state = (GIF_PATH_STATE)(gifTag.tag.FLG + 1);
 				GUNIT_WARN("PATH %d New tag State %d FLG %d EOP %d NLOOP %d", gifRegs.stat.APATH, gifRegs.stat.APATH, state, gifTag.tag.FLG, gifTag.tag.EOP, gifTag.tag.NLOOP);
-				// We don't have enough data for a complete GS packet
-				if (!gifTag.hasAD && curOffset + 16 + gifTag.len > curSize)
-				{
-					gifTag.isValid = false; // So next time we test again
-					GUNIT_WARN("PATH %d not enough data, available %d wanted %d", gifRegs.stat.APATH, curSize - curOffset, 16 + gifTag.len);
-					return gsPack;
-				}
-
 				incTag(curOffset, gsPack.size, 16); // Tag Size
 				gsPack.cycles += 2 + gifTag.cycles; // Tag + Len ee-cycles
+				// Keep the decoded tag while waiting for the rest of a non-A+D packet.
+				if (!gifTag.hasAD && curOffset + gifTag.len > curSize)
+				{
+					GUNIT_WARN("PATH %d not enough data, available %d wanted %d", gifRegs.stat.APATH, curSize - curOffset, gifTag.len);
+					return gsPack;
+				}
 			}
 
 			if (gifTag.hasAD)
@@ -690,7 +696,10 @@ struct Gif_Unit
 			} // DirectHL Stall
 		}
 
-		gifPath[tranType & 3].CopyGSPacketData(pMem, size, aligned);
+		Gif_Path& transfer_path = gifPath[tranType & 3];
+		transfer_path.CopyGSPacketData(pMem, size, aligned);
+		if (tranType == GIF_TRANS_XGKICK && stat.APATH == 1 && !transfer_path.canAdvancePacket())
+			return size;
 		size -= Execute(tranType == GIF_TRANS_DMA, false);
 		return size;
 	}

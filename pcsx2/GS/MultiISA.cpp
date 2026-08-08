@@ -60,6 +60,13 @@ static ProcessorFeatures getProcessorFeatures()
 	features.vectorISA = getCurrentISA();
 	features.hasFMA = cpuinfo_has_x86_fma3();
 	features.hasBMI2 = cpuinfo_has_x86_bmi() && cpuinfo_has_x86_bmi2();
+	features.hasFastPext = features.hasBMI2;
+	if (features.hasFastPext && cpuinfo_get_uarchs_count() > 0)
+	{
+		const enum cpuinfo_uarch uarch = cpuinfo_get_uarch(0)->uarch;
+		// PEXT is slowly microcoded on Zen and Zen 2
+		features.hasFastPext = uarch != cpuinfo_uarch_zen && uarch != cpuinfo_uarch_zen2;
+	}
 	if (const char* over = getenv("OVERRIDE_FMA"))
 	{
 		features.hasFMA = over[0] == 'Y' || over[0] == 'y' || over[0] == '1';

@@ -601,6 +601,8 @@ namespace x86Emitter
 
 	extern const xImplSimd_Shift xPSLL;
 	extern const xImplSimd_Shift xPSRL;
+	extern void xVPSLLVD(const xRegisterSSE& dst, const xRegisterSSE& src, const xRegisterSSE& counts);
+	extern void xVPSRLVD(const xRegisterSSE& dst, const xRegisterSSE& src, const xRegisterSSE& counts);
 	extern const xImplSimd_ShiftWithoutQ xPSRA;
 	extern const xImplSimd_AddSub xPADD;
 	extern const xImplSimd_AddSub xPSUB;

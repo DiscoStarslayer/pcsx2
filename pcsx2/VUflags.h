@@ -5,7 +5,6 @@
 #include "VU.h"
 #include "PS2Float.h"
 
-extern bool IsOverflowSet(VURegs* VU, s32 shift);
 extern u32  VU_MACx_UPDATE(VURegs * VU, float x);
 extern u32  VU_MACy_UPDATE(VURegs * VU, float y);
 extern u32  VU_MACz_UPDATE(VURegs * VU, float z);

@@ -11,6 +11,911 @@
 // DIV/SQRT/RSQRT
 //------------------------------------------------------------------
 
+struct mVUSoftDivCapTailPatch
+{
+	std::optional<xForwardJump32> entry;
+	const u8* srt_resume = nullptr;
+	const u8* quotient_ready = nullptr;
+};
+
+static constexpr sptr mVUsoftUnaryCacheKeyOffset = offsetof(microVUSoftUnaryCacheEntry, key);
+static constexpr sptr mVUsoftLowerCacheKeyAOffset = offsetof(microVUSoftLowerCacheEntry, key_a);
+
+static void mVUemitLowerSoftUnaryCacheIndex(const xRegister32& index, const xRegister32& key)
+{
+	static_assert(mVUsoftLowerCacheSize == 4096);
+	xMUL(index, key, static_cast<s32>(2654435761u));
+	xSHR(index, 20);
+}
+
+static void mVUemitLowerSoftBinaryCacheIndex(
+	const xRegister32& index, const xRegister32& key_a, const xRegister32& key_b)
+{
+	xMUL(index, key_b, static_cast<s32>(2246822519u));
+	xXOR(index, key_a);
+	mVUemitLowerSoftUnaryCacheIndex(index, index);
+}
+
+template <typename CacheEntry>
+static void mVUemitLowerSoftCacheAddress(const CacheEntry* cache)
+{
+	static_assert(sizeof(CacheEntry) == 16 || sizeof(CacheEntry) == 32);
+	constexpr u8 entry_shift = sizeof(CacheEntry) == 16 ? 4 : 5;
+	xSHL(ecx, entry_shift);
+	xMOV64(r11, reinterpret_cast<uptr>(cache));
+	xADD(r11, rcx);
+}
+
+static void mVUemitLowerSoftCacheSetAddress(const microVUSoftLowerCacheSet* cache)
+{
+	xSHL(ecx, 6);
+	xMOV64(r11, reinterpret_cast<uptr>(cache));
+	xADD(r11, rcx);
+}
+
+static void mVUemitLowerSoftQAndStatusWriteback(microVU& mVU)
+{
+	// Internal exact-kernel ABI: eax = raw result, edx = current I/D exception bits.
+	xMOV(ptr32[&mVU.regs().q.UL], eax);
+	xMOV(gprT1, ptr32[&mVU.regs().VI[REG_STATUS_FLAG].UL]);
+	xAND(gprT1, ~0x30u);
+	xOR(gprT1, edx);
+	xMOV(gprT2, edx);
+	xSHL(gprT2, 6);
+	xOR(gprT1, gprT2);
+	xMOV(ptr32[&mVU.regs().statusflag], gprT1);
+
+	const xmm& q_result = mVU.regAlloc->allocReg();
+	xMOVDZX(q_result, ptr32[&mVU.regs().q.UL]);
+	writeQreg(q_result, mVUinfo.writeQ);
+	mVU.regAlloc->clearNeeded(q_result);
+	xMOV(ptr32[&mVU.regs().VI[REG_STATUS_FLAG].UL], gprT1);
+	xXOR(gprT2, gprT2);
+	xTEST(edx, 0x10);
+	xForwardJZ8 not_invalid;
+	xOR(gprT2, divI);
+	not_invalid.SetTarget();
+	xTEST(edx, 0x20);
+	xForwardJZ8 no_div_flag;
+	xOR(gprT2, divD);
+	no_div_flag.SetTarget();
+	xMOV(ptr32[&mVU.divFlag], gprT2);
+	if (sFLAG.doFlag)
+	{
+		mVUallocSFLAGd(&mVU.regs().VI[REG_STATUS_FLAG].UL, gprT1, gprT2);
+		mVUallocSFLAGb(gprT1, sFLAG.write);
+	}
+}
+
+static void mVUGenerateLowerSrtReciprocalSoftExactKernel(microVU& mVU)
+{
+	// Internal ABI: eax = raw divisor. Returns eax = raw 1.0/divisor using
+	// the P unit's SRT quotient and edx = current I/D exception bits.
+	constexpr sptr input_raw = 0;
+	constexpr int result_raw = input_raw + 4;
+	constexpr int exception = result_raw + 4;
+	constexpr int result_exp = exception + 4;
+	constexpr int stack_size = result_exp + 8;
+
+	mVU.softSrtReciprocalExact = xGetAlignedCallTarget();
+	xSUB(rsp, stack_size);
+	xMOV(ptr32[rsp + input_raw], eax);
+	mVUemitLowerSoftUnaryCacheIndex(ecx, eax);
+	mVUemitLowerSoftCacheAddress(mVU.softSrtReciprocalCache.get());
+	xCMP(ptr32[r11 + offsetof(microVUSoftUnaryCacheEntry, valid)], 0);
+	xForwardJZ32 srt_reciprocal_cache_miss_invalid;
+	xCMP(eax, ptr32[r11 + mVUsoftUnaryCacheKeyOffset]);
+	xForwardJNE32 srt_reciprocal_cache_miss_key;
+	xMOV(eax, ptr32[r11 + offsetof(microVUSoftUnaryCacheEntry, result)]);
+	xMOV(edx, ptr32[r11 + offsetof(microVUSoftUnaryCacheEntry, exception)]);
+	xForwardJump32 srt_reciprocal_finished;
+
+	srt_reciprocal_cache_miss_invalid.SetTarget();
+	srt_reciprocal_cache_miss_key.SetTarget();
+	xMOV(edx, eax);
+	xAND(edx, 0x7f800000);
+	xForwardJZ32 srt_reciprocal_divisor_zero;
+
+	xSHR(edx, 23);
+	xMOV(ecx, 253);
+	xSUB(ecx, edx);
+	xMOV(ptr32[rsp + result_exp], ecx);
+	xCMP(ecx, 0);
+	xForwardJL32 srt_reciprocal_underflow_initial;
+	// For a normalized 1.0 numerator, exhaustive characterization proves that
+	// the exact SRT quotient is the ordinary truncated 48/24 quotient plus one
+	// divisor-mantissa-indexed correction bit. Keep the established SRT packing
+	// below so normalization, exponent transitions, sign, and underflow remain
+	// identical to the recurrence path.
+	xMOV(r11d, ptr32[rsp + input_raw]);
+	xAND(r11d, 0x7fffff);
+	xOR(r11d, 0x800000);
+	xMOV64(rax, 0x800000000000ULL);
+	xXOR(edx, edx);
+	xUDIV(r11);
+
+	xMOV(ecx, ptr32[rsp + input_raw]);
+	xAND(ecx, 0x7fffff);
+	xMOV64(r10, reinterpret_cast<uptr>(MicroVUSoftFloatTables::reciprocal_correction_lookup));
+	xXOR(r9d, r9d);
+	xBT(ptr32[r10], ecx);
+	xSETB(r9b);
+	xADD(eax, r9d);
+	xCMP(eax, 1 << 24);
+	xForwardJL8 srt_reciprocal_quotient_normalized;
+	xSHR(eax, 1);
+	xINC(ptr32[rsp + result_exp]);
+	srt_reciprocal_quotient_normalized.SetTarget();
+	xMOV(edx, ptr32[rsp + result_exp]);
+	xCMP(edx, 1);
+	xForwardJL32 srt_reciprocal_underflow_normalized;
+	xAND(eax, 0x7fffff);
+	xSHL(edx, 23);
+	xOR(eax, edx);
+	xMOV(edx, ptr32[rsp + input_raw]);
+	xAND(edx, 0x80000000);
+	xOR(eax, edx);
+	xXOR(edx, edx);
+	xForwardJump32 srt_reciprocal_result_ready_normal;
+
+	srt_reciprocal_divisor_zero.SetTarget();
+	xMOV(eax, ptr32[rsp + input_raw]);
+	xAND(eax, 0x80000000);
+	xOR(eax, 0x7fffffff);
+	xMOV(edx, 0x20);
+	xForwardJump32 srt_reciprocal_result_ready_zero;
+
+	srt_reciprocal_underflow_initial.SetTarget();
+	srt_reciprocal_underflow_normalized.SetTarget();
+	xMOV(eax, ptr32[rsp + input_raw]);
+	xAND(eax, 0x80000000);
+	xXOR(edx, edx);
+
+	srt_reciprocal_result_ready_normal.SetTarget();
+	srt_reciprocal_result_ready_zero.SetTarget();
+	xMOV(ptr32[rsp + result_raw], eax);
+	xMOV(ptr32[rsp + exception], edx);
+	xMOV(eax, ptr32[rsp + input_raw]);
+	mVUemitLowerSoftUnaryCacheIndex(ecx, eax);
+	mVUemitLowerSoftCacheAddress(mVU.softSrtReciprocalCache.get());
+	xMOV(ptr32[r11 + mVUsoftUnaryCacheKeyOffset], eax);
+	xMOV(eax, ptr32[rsp + result_raw]);
+	xMOV(ptr32[r11 + offsetof(microVUSoftUnaryCacheEntry, result)], eax);
+	xMOV(edx, ptr32[rsp + exception]);
+	xMOV(ptr32[r11 + offsetof(microVUSoftUnaryCacheEntry, exception)], edx);
+	xMOV(ptr32[r11 + offsetof(microVUSoftUnaryCacheEntry, valid)], 1);
+
+	srt_reciprocal_finished.SetTarget();
+	xADD(rsp, stack_size);
+	xRET();
+}
+
+static mVUSoftDivCapTailPatch mVUGenerateLowerDivSoftExactKernel(microVU& mVU)
+{
+	// Internal ABI: eax = raw Fs lane, edx = raw Ft lane. Returns eax = raw
+	// result and edx = current I/D exception bits. DIV and RSQRT both retain the
+	// VU divider's final redundant SRT digit.
+	constexpr sptr fs_raw = 0;
+	constexpr int ft_raw = fs_raw + 4;
+	constexpr int result_raw = ft_raw + 4;
+	constexpr int exception = result_raw + 4;
+	constexpr int result_exp = exception + 4;
+	constexpr int saved_rbp = result_exp + 8;
+	constexpr int saved_rsi = saved_rbp + 8;
+	constexpr int stack_size = saved_rsi + 8;
+	mVUSoftDivCapTailPatch cap_tail;
+
+	mVU.softDivExact = xGetAlignedCallTarget();
+	xSUB(rsp, stack_size);
+	xMOV(ptr32[rsp + fs_raw], eax);
+	xMOV(ptr32[rsp + ft_raw], edx);
+	xMOV(ptr64[rsp + saved_rbp], rbp);
+	xMOV(ptr64[rsp + saved_rsi], rsi);
+	mVUemitLowerSoftBinaryCacheIndex(ecx, eax, edx);
+	mVUemitLowerSoftCacheAddress(mVU.softDivCache.get());
+	xCMP(ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, valid)], 0);
+	xForwardJZ32 division_cache_miss_invalid;
+	xCMP(eax, ptr32[r11 + mVUsoftLowerCacheKeyAOffset]);
+	xForwardJNE32 division_cache_miss_a;
+	xCMP(edx, ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, key_b)]);
+	xForwardJNE32 division_cache_miss_b;
+	xMOV(eax, ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, result)]);
+	xMOV(edx, ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, exception)]);
+	xForwardJump32 division_cache_result_ready;
+	division_cache_miss_invalid.SetTarget();
+	division_cache_miss_a.SetTarget();
+	division_cache_miss_b.SetTarget();
+
+	xMOV(eax, ptr32[rsp + fs_raw]);
+	xAND(eax, 0x7f800000);
+	xMOV(edx, ptr32[rsp + ft_raw]);
+	xAND(edx, 0x7f800000);
+	xTEST(edx, edx);
+	xForwardJNZ32 divisor_normal;
+	xMOV(eax, ptr32[rsp + fs_raw]);
+	xXOR(eax, ptr32[rsp + ft_raw]);
+	xAND(eax, 0x80000000);
+	xOR(eax, 0x7fffffff);
+	xTEST(ptr32[rsp + fs_raw], 0x7f800000);
+	xForwardJNZ8 divide_by_zero;
+	xMOV(edx, 0x10);
+	xForwardJump32 result_ready_from_invalid;
+	divide_by_zero.SetTarget();
+	xMOV(edx, 0x20);
+	xForwardJump32 result_ready_from_divide;
+
+	divisor_normal.SetTarget();
+	xTEST(eax, eax);
+	xForwardJNZ32 dividend_normal;
+	xMOV(eax, ptr32[rsp + fs_raw]);
+	xXOR(eax, ptr32[rsp + ft_raw]);
+	xAND(eax, 0x80000000);
+	xXOR(edx, edx);
+	xForwardJump32 result_ready_from_zero;
+
+	dividend_normal.SetTarget();
+	xMOV(eax, ptr32[rsp + fs_raw]);
+	xSHR(eax, 23);
+	xAND(eax, 0xff);
+	xMOV(edx, ptr32[rsp + ft_raw]);
+	xSHR(edx, 23);
+	xAND(edx, 0xff);
+	xSUB(eax, edx);
+	xADD(eax, 126);
+	xMOV(ptr32[rsp + result_exp], eax);
+	xCMP(eax, 255);
+	xForwardJG32 division_overflow;
+	xCMP(eax, 0);
+	xForwardJL32 division_underflow;
+
+
+	// Keep the probe body outside the program-code region so this path does not
+	// shift any shared helper or guest-program entry. The original SRT path
+	// begins with a three-byte MOV and five-byte AND; replace those eight bytes
+	// with the five-byte tail jump plus padding, then restore the displaced
+	// instructions before resuming the byte-for-byte recurrence on fallback.
+	cap_tail.entry.emplace();
+	xNOP();
+	xNOP();
+	xNOP();
+	cap_tail.srt_resume = xGetPtr();
+	xOR(eax, 0x800000);
+	xSHL(eax, 2);
+	xMOV(r9d, eax);
+	xMOV(eax, ptr32[rsp + ft_raw]);
+	xAND(eax, 0x7fffff);
+	xOR(eax, 0x800000);
+	xSHL(eax, 2);
+	xMOV(r11d, eax);
+	xXOR(r10d, r10d);
+	xXOR(ebp, ebp);
+	xMOV(r8d, 1);
+
+	xMOV(esi, 23);
+	u8* const quotient_loop = xGetPtr();
+	xSHL(ebp, 1);
+	xADD(ebp, r8d);
+	X86SoftFloatEmitter::EmitDivCarrySaveStep();
+	xDEC(esi);
+	xJcc32(Jcc_NotZero,
+		static_cast<s32>(reinterpret_cast<sptr>(quotient_loop) - (reinterpret_cast<sptr>(xGetPtr()) + 6)));
+
+	xSHL(ebp, 1);
+	xADD(ebp, r8d);
+	X86SoftFloatEmitter::EmitDivCarrySaveStep();
+	xMOV(eax, ebp);
+	xSHL(eax, 1);
+	xADD(eax, r8d);
+	xCMP(eax, 1 << 24);
+	xForwardJL8 srt_quotient_normalized;
+	xSHR(eax, 1);
+	xINC(ptr32[rsp + result_exp]);
+	srt_quotient_normalized.SetTarget();
+	cap_tail.quotient_ready = xGetPtr();
+	xMOV(edx, ptr32[rsp + result_exp]);
+	xCMP(edx, 255);
+	xForwardJG32 division_overflow_after_normalize;
+	xCMP(edx, 1);
+	xForwardJL32 division_underflow_after_normalize;
+	xAND(eax, 0x7fffff);
+	xSHL(edx, 23);
+	xOR(eax, edx);
+	xMOV(ecx, ptr32[rsp + fs_raw]);
+	xXOR(ecx, ptr32[rsp + ft_raw]);
+	xAND(ecx, 0x80000000);
+	xOR(eax, ecx);
+	xXOR(edx, edx);
+	xForwardJump32 result_ready;
+
+	division_overflow.SetTarget();
+	division_overflow_after_normalize.SetTarget();
+	xMOV(eax, ptr32[rsp + fs_raw]);
+	xXOR(eax, ptr32[rsp + ft_raw]);
+	xAND(eax, 0x80000000);
+	xOR(eax, 0x7fffffff);
+	xXOR(edx, edx);
+	xForwardJump32 result_ready_from_overflow;
+
+	division_underflow.SetTarget();
+	division_underflow_after_normalize.SetTarget();
+	xMOV(eax, ptr32[rsp + fs_raw]);
+	xXOR(eax, ptr32[rsp + ft_raw]);
+	xAND(eax, 0x80000000);
+	xXOR(edx, edx);
+
+	result_ready.SetTarget();
+	result_ready_from_overflow.SetTarget();
+	result_ready_from_zero.SetTarget();
+	result_ready_from_invalid.SetTarget();
+	result_ready_from_divide.SetTarget();
+	xMOV(ptr32[rsp + result_raw], eax);
+	xMOV(ptr32[rsp + exception], edx);
+	xMOV(eax, ptr32[rsp + fs_raw]);
+	xMOV(edx, ptr32[rsp + ft_raw]);
+	mVUemitLowerSoftBinaryCacheIndex(ecx, eax, edx);
+	mVUemitLowerSoftCacheAddress(mVU.softDivCache.get());
+	xMOV(ptr32[r11 + mVUsoftLowerCacheKeyAOffset], eax);
+	xMOV(ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, key_b)], edx);
+	xMOV(eax, ptr32[rsp + result_raw]);
+	xMOV(ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, result)], eax);
+	xMOV(edx, ptr32[rsp + exception]);
+	xMOV(ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, exception)], edx);
+	xMOV(ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, valid)], 1);
+	division_cache_result_ready.SetTarget();
+	xMOV(rbp, ptr64[rsp + saved_rbp]);
+	xMOV(rsi, ptr64[rsp + saved_rsi]);
+	xADD(rsp, stack_size);
+	xRET();
+	return cap_tail;
+}
+
+static void mVUGenerateLowerDivSoftCapTail(const mVUSoftDivCapTailPatch& cap_tail)
+{
+	constexpr sptr fs_raw = 0;
+	constexpr int ft_raw = fs_raw + 4;
+	constexpr int result_raw = ft_raw + 4;
+	constexpr int exception = result_raw + 4;
+	constexpr int result_exp = exception + 4;
+	static_assert(result_exp == 16);
+	pxAssert(cap_tail.entry.has_value());
+	pxAssert(cap_tail.srt_resume && cap_tail.quotient_ready);
+	cap_tail.entry->SetTarget();
+
+	xMOV(r9d, ptr32[rsp + fs_raw]);
+	xAND(r9d, 0x7fffff);
+	xOR(r9d, 0x800000);
+	xMOV(r11d, ptr32[rsp + ft_raw]);
+	xAND(r11d, 0x7fffff);
+	xOR(r11d, 0x800000);
+	X86SoftFloatEmitter::EmitSrtDivCapQuotient();
+	xCMP(ecx, edx);
+	xForwardJA32 cap_safe;
+	xMOV(eax, ptr32[rsp + fs_raw]);
+	xAND(eax, 0x7fffff);
+	xJMP(cap_tail.srt_resume);
+	cap_safe.SetTarget();
+	xTEST(r8d, r8d);
+	xForwardJNZ8 exponent_ready;
+	xINC(ptr32[rsp + result_exp]);
+	exponent_ready.SetTarget();
+	xJMP(cap_tail.quotient_ready);
+}
+
+static void mVUGenerateLowerSqrtSoftExactKernel(microVU& mVU)
+{
+	// Internal ABI: eax = raw Ft lane. Returns eax = raw result and edx = current
+	// I/D exception bits.
+	constexpr sptr ft_raw = 0;
+	constexpr int exception = ft_raw + 4;
+	constexpr int result_raw = exception + 4;
+	constexpr int saved_rbp = 16;
+	constexpr int saved_rsi = saved_rbp + 8;
+	constexpr int saved_rdi = saved_rsi + 8;
+	constexpr int saved_xmm = saved_rdi + 8;
+	constexpr int stack_size = saved_xmm + 16 + 8;
+
+	mVU.softSqrtExact = xGetAlignedCallTarget();
+	xSUB(rsp, stack_size);
+	xMOVAPS(ptr128[rsp + saved_xmm], xmm0);
+	xMOV(ptr32[rsp + ft_raw], eax);
+	mVUemitLowerSoftUnaryCacheIndex(ecx, eax);
+	mVUemitLowerSoftCacheAddress(mVU.softSqrtCache.get());
+	xCMP(ptr32[r11 + offsetof(microVUSoftUnaryCacheEntry, valid)], 0);
+	xForwardJZ32 sqrt_cache_miss_invalid;
+	xCMP(eax, ptr32[r11 + mVUsoftUnaryCacheKeyOffset]);
+	xForwardJNE32 sqrt_cache_miss_key;
+	xMOV(eax, ptr32[r11 + offsetof(microVUSoftUnaryCacheEntry, result)]);
+	xMOV(edx, ptr32[r11 + offsetof(microVUSoftUnaryCacheEntry, exception)]);
+	xForwardJump32 sqrt_cache_result_ready;
+	sqrt_cache_miss_invalid.SetTarget();
+	sqrt_cache_miss_key.SetTarget();
+	xXOR(edx, edx);
+	xTEST(eax, 0x80000000);
+	xForwardJZ8 sqrt_status_ready;
+	xMOV(edx, 0x10);
+	sqrt_status_ready.SetTarget();
+	xMOV(ptr32[rsp + exception], edx);
+	xTEST(eax, 0x7f800000);
+	xForwardJNZ32 sqrt_normal;
+	xXOR(eax, eax);
+	xForwardJump32 sqrt_result_ready_from_zero;
+
+	sqrt_normal.SetTarget();
+	xMOV(edx, ptr32[rsp + ft_raw]);
+	xAND(edx, 0x7f800000);
+	xCMP(edx, 0x7f800000);
+	xForwardJZ32 sqrt_extended_input;
+	xMOVDZX(xmm0, ptr32[rsp + ft_raw]);
+	xPAND(xmm0, ptr128[mVUglob.absclip]);
+	const bool switch_mxcsr = mVUupperSoftNeedsTruncateMxcsr(mVU);
+	if (switch_mxcsr)
+		xLDMXCSR(ptr32[&s_vu_soft_truncate_mxcsr]);
+	xSQRT.SS(xmm0, xmm0);
+	if (switch_mxcsr)
+		xLDMXCSR(ptr32[mVU.index == 0 ? &EmuConfig.Cpu.VU0FPCR.bitmask : &EmuConfig.Cpu.VU1FPCR.bitmask]);
+	xMOVD(r9d, xmm0);
+	xTEST(ptr32[rsp + ft_raw], 0x7fffff);
+	xForwardJZ32 sqrt_correction_ready;
+	// SQRTSS with chop rounding supplies floor(sqrt(radicand)). Hardware never
+	// applies the PS2 SRT +1 correction below the exact midpoint between this
+	// root and the next. Prove that lower half with a 24x24->48 square and avoid
+	// the correction bitmap; retain the bitmap for the representation-sensitive
+	// upper half.
+	xMOV(eax, r9d);
+	xAND(eax, 0x7fffff);
+	xOR(eax, 0x800000);
+	xMOV(r8d, eax);
+	xUMUL(r8);
+	xADD(rax, r8);
+	xMOV(r10d, ptr32[rsp + ft_raw]);
+	xAND(r10d, 0x7fffff);
+	xOR(r10d, 0x800000);
+	xSHL(r10, 23);
+	xTEST(ptr32[rsp + ft_raw], 0x800000);
+	xForwardJNZ8 sqrt_residual_radicand_ready;
+	xADD(r10, r10);
+	sqrt_residual_radicand_ready.SetTarget();
+	xCMP(r10, rax);
+	xForwardJBE8 sqrt_residual_floor;
+	xMOV(edx, ptr32[rsp + ft_raw]);
+	xMOV(ecx, edx);
+	xAND(ecx, 0x7fffff);
+	xSHR(edx, 23);
+	xAND(edx, 1);
+	xXOR(edx, 1);
+	xSHL(edx, 23);
+	xOR(ecx, edx);
+	xMOV64(r10, reinterpret_cast<uptr>(MicroVUSoftFloatTables::sqrt_correction_lookup));
+	xXOR(eax, eax);
+	xBT(ptr32[r10], ecx);
+	xSETB(al);
+	xADD(eax, r9d);
+	xForwardJump8 sqrt_corrected_result_ready;
+	sqrt_residual_floor.SetTarget();
+	xMOV(eax, r9d);
+	xForwardJump8 sqrt_residual_result_ready;
+	sqrt_correction_ready.SetTarget();
+	xMOV(eax, r9d);
+	sqrt_residual_result_ready.SetTarget();
+	sqrt_corrected_result_ready.SetTarget();
+	xForwardJump32 sqrt_result_ready_from_fast;
+
+	sqrt_extended_input.SetTarget();
+	xMOV(ptr64[rsp + saved_rbp], rbp);
+	xMOV(ptr64[rsp + saved_rsi], rsi);
+	xMOV(ptr64[rsp + saved_rdi], rdi);
+	xMOV(eax, ptr32[rsp + ft_raw]);
+	xAND(eax, 0x7fffff);
+	xOR(eax, 0x800000);
+	xSHL(eax, 1);
+	xTEST(ptr32[rsp + ft_raw], 0x800000);
+	xForwardJNZ8 sqrt_mantissa_ready;
+	xSHL(eax, 1);
+	sqrt_mantissa_ready.SetTarget();
+	xMOV(r9d, eax);
+	xXOR(r10d, r10d);
+	xXOR(ebp, ebp);
+	xMOV(r8d, 1);
+
+	xXOR(esi, esi);
+	u8* const sqrt_loop = xGetPtr();
+	xMOV(ecx, 24);
+	xSUB(ecx, esi);
+	xMOV(eax, r8d);
+	xSHL(eax, cl);
+	xADD(eax, ebp);
+	xMOV(edi, eax);
+	xMOV(ecx, 25);
+	xSUB(ecx, esi);
+	xMOV(eax, r8d);
+	xSHL(eax, cl);
+	xADD(ebp, eax);
+	X86SoftFloatEmitter::EmitSqrtCarrySaveStep();
+	xINC(esi);
+	xCMP(esi, 23);
+	xJcc32(Jcc_Less, static_cast<s32>(reinterpret_cast<sptr>(sqrt_loop) - (reinterpret_cast<sptr>(xGetPtr()) + 6)));
+
+	xMOV(eax, r8d);
+	xSHL(eax, 1);
+	xADD(eax, ebp);
+	xMOV(edi, eax);
+	xMOV(eax, r8d);
+	xSHL(eax, 2);
+	xADD(ebp, eax);
+	X86SoftFloatEmitter::EmitSqrtCarrySaveStep();
+	xMOV(eax, r8d);
+	xSHL(eax, 1);
+	xADD(eax, ebp);
+	xSHR(eax, 2);
+	xAND(eax, 0x7fffff);
+	xMOV(edx, ptr32[rsp + ft_raw]);
+	xSHR(edx, 23);
+	xAND(edx, 0xff);
+	xADD(edx, 127);
+	xSHR(edx, 1);
+	xSHL(edx, 23);
+	xOR(eax, edx);
+	xMOV(rbp, ptr64[rsp + saved_rbp]);
+	xMOV(rsi, ptr64[rsp + saved_rsi]);
+	xMOV(rdi, ptr64[rsp + saved_rdi]);
+
+	sqrt_result_ready_from_zero.SetTarget();
+	sqrt_result_ready_from_fast.SetTarget();
+	xMOV(ptr32[rsp + result_raw], eax);
+	xMOV(eax, ptr32[rsp + ft_raw]);
+	xMOV(ptr32[r11 + mVUsoftUnaryCacheKeyOffset], eax);
+	xMOV(eax, ptr32[rsp + result_raw]);
+	xMOV(ptr32[r11 + offsetof(microVUSoftUnaryCacheEntry, result)], eax);
+	xMOV(edx, ptr32[rsp + exception]);
+	xMOV(ptr32[r11 + offsetof(microVUSoftUnaryCacheEntry, exception)], edx);
+	xMOV(ptr32[r11 + offsetof(microVUSoftUnaryCacheEntry, valid)], 1);
+	sqrt_cache_result_ready.SetTarget();
+	xMOVAPS(xmm0, ptr128[rsp + saved_xmm]);
+	xADD(rsp, stack_size);
+	xRET();
+}
+
+static void mVUGenerateLowerRsqrtSoftExactKernel(microVU& mVU)
+{
+	// Internal ABI: eax = raw Fs lane, edx = raw Ft lane. Returns eax = raw
+	// result and edx = current I/D exception bits. Normal finite misses keep the
+	// exact SQRT correction and DIV quotient in one frame; extended inputs use
+	// the separate exact helpers as a cold side exit.
+	constexpr sptr fs_raw = 0;
+	constexpr int ft_raw = fs_raw + 4;
+	constexpr int result_raw = ft_raw + 4;
+	constexpr int exception = result_raw + 4;
+	constexpr int result_exp = exception + 4;
+	constexpr int saved_rbp = result_exp + 4;
+	constexpr int saved_rsi = saved_rbp + 8;
+	constexpr int saved_xmm = (saved_rsi + 8 + 15) & ~15;
+	constexpr int stack_size = saved_xmm + 16 + 8;
+
+	static_assert((stack_size & 15) == 8);
+	mVU.softRsqrtExact = xGetAlignedCallTarget();
+	xSUB(rsp, stack_size);
+	xMOV(ptr32[rsp + fs_raw], eax);
+	xMOV(ptr32[rsp + ft_raw], edx);
+	xMOV(ptr64[rsp + saved_rbp], rbp);
+	xMOV(ptr64[rsp + saved_rsi], rsi);
+	xMOVAPS(ptr128[rsp + saved_xmm], xmm0);
+
+	mVUemitLowerSoftBinaryCacheIndex(ecx, eax, edx);
+	mVUemitLowerSoftCacheSetAddress(mVU.softRsqrtCache.get());
+	xCMP(ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, valid)], 0);
+	xForwardJZ32 rsqrt_cache_probe_way1_invalid;
+	xCMP(eax, ptr32[r11 + mVUsoftLowerCacheKeyAOffset]);
+	xForwardJNE32 rsqrt_cache_probe_way1_a;
+	xCMP(edx, ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, key_b)]);
+	xForwardJNE32 rsqrt_cache_probe_way1_b;
+	xMOV(eax, ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, result)]);
+	xMOV(edx, ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, exception)]);
+	xForwardJump32 rsqrt_finished_way0;
+
+	rsqrt_cache_probe_way1_invalid.SetTarget();
+	rsqrt_cache_probe_way1_a.SetTarget();
+	rsqrt_cache_probe_way1_b.SetTarget();
+	xADD(r11, sizeof(microVUSoftLowerCacheEntry));
+	xCMP(ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, valid)], 0);
+	xForwardJZ32 rsqrt_cache_miss_invalid;
+	xCMP(eax, ptr32[r11 + mVUsoftLowerCacheKeyAOffset]);
+	xForwardJNE32 rsqrt_cache_miss_a;
+	xCMP(edx, ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, key_b)]);
+	xForwardJNE32 rsqrt_cache_miss_b;
+	xMOV(eax, ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, result)]);
+	xMOV(edx, ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, exception)]);
+	xForwardJump32 rsqrt_finished;
+
+	rsqrt_cache_miss_invalid.SetTarget();
+	rsqrt_cache_miss_a.SetTarget();
+	rsqrt_cache_miss_b.SetTarget();
+	xMOV(ecx, ptr32[rsp + ft_raw]);
+	xAND(ecx, 0x7f800000);
+	xForwardJZ32 rsqrt_zero_divisor;
+	xCMP(ecx, 0x7f800000);
+	xForwardJE32 rsqrt_ft_exceptional_side_exit;
+	xMOV(ecx, ptr32[rsp + fs_raw]);
+	xAND(ecx, 0x7f800000);
+	xForwardJZ32 rsqrt_zero_dividend;
+	xCMP(ecx, 0x7f800000);
+	xForwardJE32 rsqrt_fs_exceptional_side_exit;
+
+	// Start with a chop-mode SQRTSS candidate, then apply the exact PS2 correction.
+	xMOVDZX(xmm0, ptr32[rsp + ft_raw]);
+	xPAND(xmm0, ptr128[mVUglob.absclip]);
+	const bool switch_mxcsr = mVUupperSoftNeedsTruncateMxcsr(mVU);
+	if (switch_mxcsr)
+		xLDMXCSR(ptr32[&s_vu_soft_truncate_mxcsr]);
+	xSQRT.SS(xmm0, xmm0);
+	if (switch_mxcsr)
+		xLDMXCSR(ptr32[mVU.index == 0 ? &EmuConfig.Cpu.VU0FPCR.bitmask : &EmuConfig.Cpu.VU1FPCR.bitmask]);
+	xMOVD(r9d, xmm0);
+	xTEST(ptr32[rsp + ft_raw], 0x7fffff);
+	xForwardJZ32 rsqrt_sqrt_correction_ready;
+	xMOV(eax, r9d);
+	xAND(eax, 0x7fffff);
+	xOR(eax, 0x800000);
+	xMOV(r8d, eax);
+	xUMUL(r8);
+	// (R + 1)^2 - X > 2^23 is equivalent, over integers, to
+	// X <= R^2 + 2R - 2^23. The cap proves the exact SRT floor;
+	// unsafe inputs retain the existing correction bitmap.
+	xLEA(rax, ptr[r8 * 2 + rax - (1 << 23)]);
+	xMOV(r10d, ptr32[rsp + ft_raw]);
+	xAND(r10d, 0x7fffff);
+	xOR(r10d, 0x800000);
+	xSHL(r10, 23);
+	xTEST(ptr32[rsp + ft_raw], 0x800000);
+	xForwardJNZ8 rsqrt_sqrt_residual_radicand_ready;
+	xADD(r10, r10);
+	rsqrt_sqrt_residual_radicand_ready.SetTarget();
+	xCMP(r10, rax);
+	xForwardJBE8 rsqrt_sqrt_residual_floor;
+	xMOV(edx, ptr32[rsp + ft_raw]);
+	xMOV(ecx, edx);
+	xAND(ecx, 0x7fffff);
+	xSHR(edx, 23);
+	xAND(edx, 1);
+	xXOR(edx, 1);
+	xSHL(edx, 23);
+	xOR(ecx, edx);
+	xMOV64(r10, reinterpret_cast<uptr>(MicroVUSoftFloatTables::sqrt_correction_lookup));
+	xXOR(eax, eax);
+	xBT(ptr32[r10], ecx);
+	xSETB(al);
+	xADD(eax, r9d);
+	xForwardJump8 rsqrt_sqrt_result_ready;
+	rsqrt_sqrt_residual_floor.SetTarget();
+	xMOV(eax, r9d);
+	xForwardJump8 rsqrt_sqrt_result_ready_from_floor;
+	rsqrt_sqrt_correction_ready.SetTarget();
+	xMOV(eax, r9d);
+	rsqrt_sqrt_result_ready_from_floor.SetTarget();
+	rsqrt_sqrt_result_ready.SetTarget();
+	xMOV(r11d, eax);
+
+	// Feed the exact root directly into the existing VU quotient recurrence.
+	xMOV(eax, ptr32[rsp + fs_raw]);
+	xSHR(eax, 23);
+	xAND(eax, 0xff);
+	xMOV(edx, r11d);
+	xSHR(edx, 23);
+	xAND(edx, 0xff);
+	xSUB(eax, edx);
+	xADD(eax, 126);
+	xMOV(ptr32[rsp + result_exp], eax);
+	xCMP(eax, 255);
+	xForwardJG32 rsqrt_initial_overflow;
+	xCMP(eax, 0);
+	xForwardJL32 rsqrt_initial_underflow;
+
+	xMOV(eax, ptr32[rsp + fs_raw]);
+	xAND(eax, 0x7fffff);
+	xOR(eax, 0x800000);
+	xSHL(eax, 2);
+	xMOV(r9d, eax);
+	xAND(r11d, 0x7fffff);
+	xOR(r11d, 0x800000);
+	xSHL(r11d, 2);
+	xXOR(r10d, r10d);
+	xXOR(ebp, ebp);
+	xMOV(r8d, 1);
+	xMOV(esi, 23);
+	u8* const quotient_loop = xGetPtr();
+	xSHL(ebp, 1);
+	xADD(ebp, r8d);
+	X86SoftFloatEmitter::EmitDivCarrySaveStep();
+	xDEC(esi);
+	xJcc32(Jcc_NotZero,
+		static_cast<s32>(reinterpret_cast<sptr>(quotient_loop) - (reinterpret_cast<sptr>(xGetPtr()) + 6)));
+	xSHL(ebp, 1);
+	xADD(ebp, r8d);
+	X86SoftFloatEmitter::EmitDivCarrySaveStep();
+	xMOV(eax, ebp);
+	xSHL(eax, 1);
+	xADD(eax, r8d);
+	xCMP(eax, 1 << 24);
+	xForwardJL8 rsqrt_quotient_normalized;
+	xSHR(eax, 1);
+	xINC(ptr32[rsp + result_exp]);
+	rsqrt_quotient_normalized.SetTarget();
+	xMOV(edx, ptr32[rsp + result_exp]);
+	xCMP(edx, 255);
+	xForwardJG32 rsqrt_normalized_overflow;
+	xCMP(edx, 1);
+	xForwardJL32 rsqrt_normalized_underflow;
+	xAND(eax, 0x7fffff);
+	xSHL(edx, 23);
+	xOR(eax, edx);
+	xMOV(ecx, ptr32[rsp + fs_raw]);
+	xAND(ecx, 0x80000000);
+	xOR(eax, ecx);
+	xForwardJump32 rsqrt_normal_quotient_result_ready;
+
+	rsqrt_initial_overflow.SetTarget();
+	rsqrt_normalized_overflow.SetTarget();
+	xMOV(eax, ptr32[rsp + fs_raw]);
+	xAND(eax, 0x80000000);
+	xOR(eax, 0x7fffffff);
+	xForwardJump32 rsqrt_overflow_result_ready;
+	rsqrt_initial_underflow.SetTarget();
+	rsqrt_normalized_underflow.SetTarget();
+	xMOV(eax, ptr32[rsp + fs_raw]);
+	xAND(eax, 0x80000000);
+
+	rsqrt_normal_quotient_result_ready.SetTarget();
+	rsqrt_overflow_result_ready.SetTarget();
+	xXOR(edx, edx);
+	xTEST(ptr32[rsp + ft_raw], 0x80000000);
+	xForwardJZ32 rsqrt_normal_positive_result_ready;
+	xMOV(edx, 0x10);
+	xForwardJump32 rsqrt_normal_status_result_ready;
+
+	rsqrt_zero_dividend.SetTarget();
+	xMOV(eax, ptr32[rsp + fs_raw]);
+	xAND(eax, 0x80000000);
+	xXOR(edx, edx);
+	xTEST(ptr32[rsp + ft_raw], 0x80000000);
+	xForwardJZ32 rsqrt_zero_dividend_positive_result_ready;
+	xMOV(edx, 0x10);
+	xForwardJump32 rsqrt_zero_dividend_status_result_ready;
+
+	rsqrt_zero_divisor.SetTarget();
+	xMOV(eax, 0x7fffffffu);
+	xMOV(ecx, ptr32[rsp + fs_raw]);
+	xAND(ecx, 0x7fffffff);
+	xMOV(edx, 0x10);
+	xForwardJZ8 rsqrt_zero_divisor_invalid_result_ready;
+	xMOV(edx, 0x20);
+	xTEST(ptr32[rsp + ft_raw], 0x80000000);
+	xForwardJZ8 rsqrt_zero_divisor_divide_result_ready;
+	xOR(edx, 0x10);
+	rsqrt_zero_divisor_invalid_result_ready.SetTarget();
+	rsqrt_zero_divisor_divide_result_ready.SetTarget();
+	xForwardJump32 rsqrt_zero_divisor_result_ready;
+
+	rsqrt_ft_exceptional_side_exit.SetTarget();
+	rsqrt_fs_exceptional_side_exit.SetTarget();
+	xMOV(eax, ptr32[rsp + ft_raw]);
+	xCALL(mVU.softSqrtExact);
+	xMOV(edx, eax);
+	xMOV(eax, ptr32[rsp + fs_raw]);
+	xCALL(mVU.softDivExact);
+	xXOR(edx, edx);
+	xTEST(ptr32[rsp + ft_raw], 0x80000000);
+	xForwardJZ8 rsqrt_exceptional_positive_result_ready;
+	xMOV(edx, 0x10);
+
+	rsqrt_normal_positive_result_ready.SetTarget();
+	rsqrt_normal_status_result_ready.SetTarget();
+	rsqrt_zero_dividend_positive_result_ready.SetTarget();
+	rsqrt_zero_dividend_status_result_ready.SetTarget();
+	rsqrt_zero_divisor_result_ready.SetTarget();
+	rsqrt_exceptional_positive_result_ready.SetTarget();
+	xMOV(ptr32[rsp + result_raw], eax);
+	xMOV(ptr32[rsp + exception], edx);
+	xMOV(eax, ptr32[rsp + fs_raw]);
+	xMOV(edx, ptr32[rsp + ft_raw]);
+	mVUemitLowerSoftBinaryCacheIndex(ecx, eax, edx);
+	mVUemitLowerSoftCacheSetAddress(mVU.softRsqrtCache.get());
+	// Way zero's valid word also holds the FIFO victim bit: 1 selects way zero
+	// and 3 selects way one on the next full-set refill. Hits never write it.
+	xCMP(ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, valid)], 0);
+	xForwardJZ8 rsqrt_cache_refill_way0;
+	xCMP(ptr32[r11 + sizeof(microVUSoftLowerCacheEntry) +
+		offsetof(microVUSoftLowerCacheEntry, valid)], 0);
+	xForwardJZ8 rsqrt_cache_refill_way1;
+	xTEST(ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, valid)], 2);
+	xForwardJNZ8 rsqrt_cache_refill_way1_full;
+	xMOV(r10d, 3);
+	xForwardJump8 rsqrt_cache_refill_address_ready;
+	rsqrt_cache_refill_way0.SetTarget();
+	xMOV(r10d, 1);
+	xForwardJump8 rsqrt_cache_refill_address_ready_from_way0;
+	rsqrt_cache_refill_way1_full.SetTarget();
+	xMOV(ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, valid)], 1);
+	rsqrt_cache_refill_way1.SetTarget();
+	xADD(r11, sizeof(microVUSoftLowerCacheEntry));
+	xMOV(r10d, 1);
+	rsqrt_cache_refill_address_ready.SetTarget();
+	rsqrt_cache_refill_address_ready_from_way0.SetTarget();
+	xMOV(ptr32[r11 + mVUsoftLowerCacheKeyAOffset], eax);
+	xMOV(ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, key_b)], edx);
+	xMOV(eax, ptr32[rsp + result_raw]);
+	xMOV(ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, result)], eax);
+	xMOV(edx, ptr32[rsp + exception]);
+	xMOV(ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, exception)], edx);
+	xMOV(ptr32[r11 + offsetof(microVUSoftLowerCacheEntry, valid)], r10d);
+
+	rsqrt_finished_way0.SetTarget();
+	rsqrt_finished.SetTarget();
+	xMOVAPS(xmm0, ptr128[rsp + saved_xmm]);
+	xMOV(rbp, ptr64[rsp + saved_rbp]);
+	xMOV(rsi, ptr64[rsp + saved_rsi]);
+	xADD(rsp, stack_size);
+	xRET();
+}
+
+static void mVUemitLowerUnarySoftExact(microVU& mVU, const void* kernel)
+{
+	mVU.regAlloc->flushCallerSavedGPRs();
+	const xmm& ft = mVU.regAlloc->allocReg(_Ft_);
+	mVUemitExtractLane(eax, ft, _Ftf_);
+	xCALL(kernel);
+	mVUemitLowerSoftQAndStatusWriteback(mVU);
+	mVU.regAlloc->clearNeeded(ft);
+}
+
+static void mVUemitLowerDivSoftExact(microVU& mVU)
+{
+	if (_Fs_ == 0 && _Fsf_ == 3)
+	{
+		mVUemitLowerUnarySoftExact(mVU, mVU.softSrtReciprocalExact);
+		return;
+	}
+
+	mVU.regAlloc->flushCallerSavedGPRs();
+	const xmm& fs = mVU.regAlloc->allocReg(_Fs_);
+	const xmm& ft = mVU.regAlloc->allocReg(_Ft_);
+	mVUemitExtractLane(eax, fs, _Fsf_);
+	mVUemitExtractLane(edx, ft, _Ftf_);
+	xCALL(mVU.softDivExact);
+	mVUemitLowerSoftQAndStatusWriteback(mVU);
+	if (ft.Id != fs.Id)
+		mVU.regAlloc->clearNeeded(ft);
+	mVU.regAlloc->clearNeeded(fs);
+}
+
+static void mVUemitLowerRsqrtSoftExact(microVU& mVU)
+{
+	mVU.regAlloc->flushCallerSavedGPRs();
+	const xmm& fs = mVU.regAlloc->allocReg(_Fs_);
+	const xmm& ft = mVU.regAlloc->allocReg(_Ft_);
+	mVUemitExtractLane(eax, fs, _Fsf_);
+	mVUemitExtractLane(edx, ft, _Ftf_);
+	xCALL(mVU.softRsqrtExact);
+	mVUemitLowerSoftQAndStatusWriteback(mVU);
+	if (ft.Id != fs.Id)
+		mVU.regAlloc->clearNeeded(ft);
+	mVU.regAlloc->clearNeeded(fs);
+}
+
+static void mVUemitLowerPSoftExact(microVU& mVU, const void* first_kernel,
+	const void* second_kernel = nullptr)
+{
+	mVU.regAlloc->flushCallerSavedGPRs();
+	const xmm& fs = mVU.regAlloc->allocReg(_Fs_);
+	mVUemitExtractLane(eax, fs, _Fsf_);
+	xCALL(first_kernel);
+	if (second_kernel)
+		xCALL(second_kernel);
+	mVU.regAlloc->clearNeeded(fs);
+
+	xPSHUF.D(xmmPQ, xmmPQ, mVUinfo.writeP ? 0x27 : 0xC6);
+	xPINSR.D(xmmPQ, eax, 0);
+	xPSHUF.D(xmmPQ, xmmPQ, mVUinfo.writeP ? 0x27 : 0xC6);
+}
+
 // Test if Vector is +/- Zero
 static __fi void testZero(const xmm& xmmReg, const xmm& xmmTemp, const x32& gprTemp)
 {
@@ -30,93 +935,17 @@ static __fi void testNeg(mV, const xmm& xmmReg, const x32& gprTemp)
 	skip.SetTarget();
 }
 
-static void mVUemitLowerDivSoftHelperCall(microVU& mVU, u32 op)
-{
-	void* helper = (op == 0) ? (void*)vuLowerDivSoftDivHelper : (op == 1) ? (void*)vuLowerDivSoftSqrtHelper : (void*)vuLowerDivSoftRsqrtHelper;
-
-	mVU.regAlloc->flushAll();
-	xMOV(gprT1, ptr32[&mVU.regs().VI[REG_STATUS_FLAG].UL]);
-	xMOV(ptr32[&mVU.regs().statusflag], gprT1);
-	xMOV(ptr32[&mVU.regs().code], mVU.code);
-
-	mVUbackupRegs(mVU, true, false);
-	xLoadFarAddr(arg1reg, &mVU.regs());
-	xFastCall(helper, arg1reg);
-	mVUrestoreRegs(mVU, true, false);
-	if (op == 2)
-	{
-		xXOR(gprT2, gprT2);
-		xMOV(gprT1, ptr32[&mVU.regs().VF[_Ft_].UL[_Ftf_]]);
-		xAND(gprT1, 0x7f800000);
-		xForwardJNZ8 ft_not_zero_or_denorm;
-
-		xMOV(gprT1, ptr32[&mVU.regs().VF[_Fs_].UL[_Fsf_]]);
-		xAND(gprT1, 0x7fffffff);
-		xForwardJNZ8 rsqrt_ft_zero_fs_nonzero;
-		xMOV(gprT2, 0x410);
-		xForwardJump8 rsqrt_status_done_0;
-
-		rsqrt_ft_zero_fs_nonzero.SetTarget();
-		xMOV(gprT2, 0x820);
-		xTEST(ptr32[&mVU.regs().VF[_Ft_].UL[_Ftf_]], 0x80000000);
-		xForwardJZ8 rsqrt_status_done_1;
-		xOR(gprT2, 0x410);
-		xForwardJump8 rsqrt_status_done_2;
-
-		ft_not_zero_or_denorm.SetTarget();
-		xTEST(ptr32[&mVU.regs().VF[_Ft_].UL[_Ftf_]], 0x80000000);
-		xForwardJZ8 rsqrt_status_done_3;
-		xMOV(gprT2, 0x410);
-
-		rsqrt_status_done_0.SetTarget();
-		rsqrt_status_done_1.SetTarget();
-		rsqrt_status_done_2.SetTarget();
-		rsqrt_status_done_3.SetTarget();
-		xMOV(gprT1, ptr32[&mVU.regs().statusflag]);
-		xAND(gprT1, ~0xc30);
-		xOR(gprT1, gprT2);
-		xMOV(ptr32[&mVU.regs().statusflag], gprT1);
-		xXOR(gprT1, gprT1);
-		xTEST(gprT2, 0x410);
-		xForwardJZ8 rsqrt_no_invalid_divflag;
-		xOR(gprT1, divI);
-		rsqrt_no_invalid_divflag.SetTarget();
-		xTEST(gprT2, 0x820);
-		xForwardJZ8 rsqrt_no_divide_divflag;
-		xOR(gprT1, divD);
-		rsqrt_no_divide_divflag.SetTarget();
-		xMOV(ptr32[&mVU.divFlag], gprT1);
-	}
-
-	xMOVDZX(xmmT1, ptr32[&mVU.regs().q.UL]);
-	writeQreg(xmmT1, mVUinfo.writeQ);
-	xMOV(gprT1, ptr32[&mVU.regs().statusflag]);
-	xMOV(ptr32[&mVU.regs().VI[REG_STATUS_FLAG].UL], gprT1);
-	xXOR(gprT2, gprT2);
-	xTEST(gprT1, 0x10);
-	xForwardJZ8 not_invalid;
-	xOR(gprT2, divI);
-	not_invalid.SetTarget();
-	xTEST(gprT1, 0x20);
-	xForwardJZ8 no_div_flag;
-	xOR(gprT2, divD);
-	no_div_flag.SetTarget();
-	xMOV(ptr32[&mVU.divFlag], gprT2);
-	if (sFLAG.doFlag)
-	{
-		mVUallocSFLAGd(&mVU.regs().VI[REG_STATUS_FLAG].UL, gprT1, gprT2);
-		mVUallocSFLAGb(gprT1, sFLAG.write);
-	}
-}
-
 mVUop(mVU_DIV)
 {
-	pass1 { mVUanalyzeFDIV(mVU, _Fs_, _Fsf_, _Ft_, _Ftf_, 7); }
+	pass1
+	{
+		mVUanalyzeFDIV(mVU, _Fs_, _Fsf_, _Ft_, _Ftf_, 7);
+	}
 	pass2
 	{
-		if (CHECK_VU_SOFT_DIVSQRT(mVU.index) && (mVU.index == 0 || IsVU1SoftNativeStageAllowed(6)))
+		if (CHECK_VU_SOFT(mVU.index))
 		{
-			mVUemitLowerDivSoftHelperCall(mVU, 0);
+			mVUemitLowerDivSoftExact(mVU);
 			mVU.profiler.EmitOp(opDIV);
 			return;
 		}
@@ -167,12 +996,15 @@ mVUop(mVU_DIV)
 
 mVUop(mVU_SQRT)
 {
-	pass1 { mVUanalyzeFDIV(mVU, 0, 0, _Ft_, _Ftf_, 7); }
+	pass1
+	{
+		mVUanalyzeFDIV(mVU, 0, 0, _Ft_, _Ftf_, 7);
+	}
 	pass2
 	{
-		if (CHECK_VU_SOFT_DIVSQRT(mVU.index) && (mVU.index == 0 || IsVU1SoftNativeStageAllowed(6)))
+		if (CHECK_VU_SOFT(mVU.index))
 		{
-			mVUemitLowerDivSoftHelperCall(mVU, 1);
+			mVUemitLowerUnarySoftExact(mVU, mVU.softSqrtExact);
 			mVU.profiler.EmitOp(opSQRT);
 			return;
 		}
@@ -201,12 +1033,15 @@ mVUop(mVU_SQRT)
 
 mVUop(mVU_RSQRT)
 {
-	pass1 { mVUanalyzeFDIV(mVU, _Fs_, _Fsf_, _Ft_, _Ftf_, 13); }
+	pass1
+	{
+		mVUanalyzeFDIV(mVU, _Fs_, _Fsf_, _Ft_, _Ftf_, 13);
+	}
 	pass2
 	{
-		if (CHECK_VU_SOFT_DIVSQRT(mVU.index) && (mVU.index == 0 || IsVU1SoftNativeStageAllowed(6)))
+		if (CHECK_VU_SOFT(mVU.index))
 		{
-			mVUemitLowerDivSoftHelperCall(mVU, 2);
+			mVUemitLowerRsqrtSoftExact(mVU);
 			mVU.profiler.EmitOp(opRSQRT);
 			return;
 		}
@@ -474,14 +1309,21 @@ mVUop(mVU_ERCPR)
 	}
 	pass2
 	{
-		const xmm& Fs = mVU.regAlloc->allocReg(_Fs_, 0, (1 << (3 - _Fsf_)));
-		xPSHUF.D      (xmmPQ, xmmPQ, mVUinfo.writeP ? 0x27 : 0xC6); // Flip xmmPQ to get Valid P instance
-		xMOVSS        (xmmPQ, Fs);
-		xMOVSSZX      (Fs, ptr32[mVUglob.one]);
-		SSE_DIVSS(mVU, Fs, xmmPQ);
-		xMOVSS        (xmmPQ, Fs);
-		xPSHUF.D      (xmmPQ, xmmPQ, mVUinfo.writeP ? 0x27 : 0xC6); // Flip back
-		mVU.regAlloc->clearNeeded(Fs);
+		if (CHECK_VU_SOFT(1))
+		{
+			mVUemitLowerPSoftExact(mVU, mVU.softSrtReciprocalExact);
+		}
+		else
+		{
+			const xmm& Fs = mVU.regAlloc->allocReg(_Fs_, 0, (1 << (3 - _Fsf_)));
+			xPSHUF.D      (xmmPQ, xmmPQ, mVUinfo.writeP ? 0x27 : 0xC6); // Flip xmmPQ to get Valid P instance
+			xMOVSS        (xmmPQ, Fs);
+			xMOVSSZX      (Fs, ptr32[mVUglob.one]);
+			SSE_DIVSS(mVU, Fs, xmmPQ);
+			xMOVSS        (xmmPQ, Fs);
+			xPSHUF.D      (xmmPQ, xmmPQ, mVUinfo.writeP ? 0x27 : 0xC6); // Flip back
+			mVU.regAlloc->clearNeeded(Fs);
+		}
 		mVU.profiler.EmitOp(opERCPR);
 	}
 	pass3 { mVUlog("ERCPR P"); }
@@ -553,15 +1395,22 @@ mVUop(mVU_ERSQRT)
 	}
 	pass2
 	{
-		const xmm& Fs = mVU.regAlloc->allocReg(_Fs_, 0, (1 << (3 - _Fsf_)));
-		xPSHUF.D      (xmmPQ, xmmPQ, mVUinfo.writeP ? 0x27 : 0xC6); // Flip xmmPQ to get Valid P instance
-		xAND.PS       (Fs, ptr128[mVUglob.absclip]);
-		xSQRT.SS      (xmmPQ, Fs);
-		xMOVSSZX      (Fs, ptr32[mVUglob.one]);
-		SSE_DIVSS(mVU, Fs, xmmPQ);
-		xMOVSS        (xmmPQ, Fs);
-		xPSHUF.D      (xmmPQ, xmmPQ, mVUinfo.writeP ? 0x27 : 0xC6); // Flip back
-		mVU.regAlloc->clearNeeded(Fs);
+		if (CHECK_VU_SOFT(1))
+		{
+			mVUemitLowerPSoftExact(mVU, mVU.softSqrtExact, mVU.softSrtReciprocalExact);
+		}
+		else
+		{
+			const xmm& Fs = mVU.regAlloc->allocReg(_Fs_, 0, (1 << (3 - _Fsf_)));
+			xPSHUF.D      (xmmPQ, xmmPQ, mVUinfo.writeP ? 0x27 : 0xC6); // Flip xmmPQ to get Valid P instance
+			xAND.PS       (Fs, ptr128[mVUglob.absclip]);
+			xSQRT.SS      (xmmPQ, Fs);
+			xMOVSSZX      (Fs, ptr32[mVUglob.one]);
+			SSE_DIVSS(mVU, Fs, xmmPQ);
+			xMOVSS        (xmmPQ, Fs);
+			xPSHUF.D      (xmmPQ, xmmPQ, mVUinfo.writeP ? 0x27 : 0xC6); // Flip back
+			mVU.regAlloc->clearNeeded(Fs);
+		}
 		mVU.profiler.EmitOp(opERSQRT);
 	}
 	pass3 { mVUlog("ERSQRT P"); }
@@ -648,12 +1497,19 @@ mVUop(mVU_ESQRT)
 	}
 	pass2
 	{
-		const xmm& Fs = mVU.regAlloc->allocReg(_Fs_, 0, (1 << (3 - _Fsf_)));
-		xPSHUF.D(xmmPQ, xmmPQ, mVUinfo.writeP ? 0x27 : 0xC6); // Flip xmmPQ to get Valid P instance
-		xAND.PS (Fs, ptr128[mVUglob.absclip]);
-		xSQRT.SS(xmmPQ, Fs);
-		xPSHUF.D(xmmPQ, xmmPQ, mVUinfo.writeP ? 0x27 : 0xC6); // Flip back
-		mVU.regAlloc->clearNeeded(Fs);
+		if (CHECK_VU_SOFT(1))
+		{
+			mVUemitLowerPSoftExact(mVU, mVU.softSqrtExact);
+		}
+		else
+		{
+			const xmm& Fs = mVU.regAlloc->allocReg(_Fs_, 0, (1 << (3 - _Fsf_)));
+			xPSHUF.D(xmmPQ, xmmPQ, mVUinfo.writeP ? 0x27 : 0xC6); // Flip xmmPQ to get Valid P instance
+			xAND.PS (Fs, ptr128[mVUglob.absclip]);
+			xSQRT.SS(xmmPQ, Fs);
+			xPSHUF.D(xmmPQ, xmmPQ, mVUinfo.writeP ? 0x27 : 0xC6); // Flip back
+			mVU.regAlloc->clearNeeded(Fs);
+		}
 		mVU.profiler.EmitOp(opESQRT);
 	}
 	pass3 { mVUlog("ESQRT P"); }
@@ -834,26 +1690,25 @@ mVUop(mVU_FSAND)
 		if (_Imm12_ & 0x030c) DevCon.WriteLn(Color_Green, "mVU_FSAND: Checking U/O/US/OS Flags");
 		const xRegister32& reg = mVU.regAlloc->allocGPR(-1, _It_, mVUlow.backupVI);
 		mVUallocSFLAGc(reg, gprT1, sFLAG.read);
-		if (mVU.index == 1 && CHECK_VU_SOFT_DIVSQRT(1) && (_Imm12_ & 0x0c30))
+		// Exact Q helpers classify I/D when the operation is issued.  Once Q has
+		// matured, reconcile those causes with the architectural status shadow so
+		// a WAITQ stall cannot leave FSAND reading the preceding delayed-ring slot.
+		// Do not consult the new divFlag while Q is pending: it belongs to the
+		// writeQ instance and is not yet architecturally visible.
+		if (CHECK_VU_SOFT(mVU.index) && !mVUregs.q && (_Imm12_ & 0x0c30))
 		{
+			xMOV(gprT1, ptr32[&mVU.regs().statusflag]);
+			xAND(gprT1, 0xc00);
+			xOR(reg, gprT1);
 			xMOV(gprT1, ptr32[&mVU.divFlag]);
 			xTEST(gprT1, divI);
 			xForwardJZ8 no_invalid_divflag;
-			xOR(reg, 0x410);
+			xOR(reg, 0x10);
 			no_invalid_divflag.SetTarget();
 			xTEST(gprT1, divD);
 			xForwardJZ8 no_divide_divflag;
-			xOR(reg, 0x820);
+			xOR(reg, 0x20);
 			no_divide_divflag.SetTarget();
-		}
-		if (mVU.index == 1 && CHECK_VU_SOFT_ADDSUB(1) && CHECK_VU_SOFT_MUL(1) && _Imm12_ == 0xfff)
-		{
-			xTEST(ptr32[&mVU.regs().statusflag], 1u << 21);
-			xForwardJZ8 no_native_product_underflow;
-			xOR(reg, 0x200);
-			if (!(mVUcount & 1))
-				xOR(reg, 0x100);
-			no_native_product_underflow.SetTarget();
 		}
 		xAND(reg, _Imm12_);
 		mVU.regAlloc->clearNeeded(reg);
@@ -934,6 +1789,15 @@ mVUop(mVU_FSSET)
 		xAND(getFlagReg(sFLAG.write), 0xfff00); // Keep Non-Sticky Bits
 		if (imm)
 			xOR(getFlagReg(sFLAG.write), imm);
+		if (mVU.index == 1 && CHECK_VU_SOFT(1))
+		{
+			xMOV(gprT1, ptr32[&mVU.regs().statusflag]);
+			xAND(gprT1, ~0xfc0u);
+			if (_Imm12_ & 0xfc0)
+				xOR(gprT1, _Imm12_ & 0xfc0);
+			xMOV(ptr32[&mVU.regs().statusflag], gprT1);
+			xMOV(ptr32[&mVU.regs().VI[REG_STATUS_FLAG].UL], gprT1);
+		}
 		mVU.profiler.EmitOp(opFSSET);
 	}
 	pass3 { mVUlog("FSSET $%x", _Imm12_); }
@@ -1552,6 +2416,8 @@ mVUop(mVU_LQI)
 // SQ/SQD/SQI
 //------------------------------------------------------------------
 
+static __fi void mVU_XGKICK_SYNC_SQI(mV);
+
 mVUop(mVU_SQ)
 {
 	pass1 { mVUanalyzeSQ(mVU, _Fs_, _It_, false); }
@@ -1576,7 +2442,6 @@ mVUop(mVU_SQ)
 			}
 			mVUaddrFix(mVU, gprT1q, gprT2q);
 		}
-
 		const xmm& Fs = mVU.regAlloc->allocReg(_Fs_, _XYZW_PS ? -1 : 0, _X_Y_Z_W);
 		mVUsaveReg(Fs, optptr.has_value() ? optptr.value() : xComplexAddress(gprT2q, mVU.regs().Mem, gprT1q), _X_Y_Z_W, 1);
 		mVU.regAlloc->clearNeeded(Fs);
@@ -1618,7 +2483,11 @@ mVUop(mVU_SQD)
 
 mVUop(mVU_SQI)
 {
-	pass1 { mVUanalyzeSQ(mVU, _Fs_, _It_, true); }
+	pass1
+	{
+		mVUanalyzeSQ(mVU, _Fs_, _It_, true);
+		mVUlow.deferXgkickSync = isVU1 && !THREAD_VU1 && _It_ != 0;
+	}
 	pass2
 	{
 		void* ptr = mVU.regs().Mem;
@@ -1630,6 +2499,8 @@ mVUop(mVU_SQI)
 			mVU.regAlloc->clearNeeded(regT);
 			mVUaddrFix(mVU, gprT1q, gprT2q);
 		}
+		if (mVUlow.deferXgkickSync && CHECK_XGKICKHACK)
+			mVU_XGKICK_SYNC_SQI(mVU);
 		const xmm& Fs = mVU.regAlloc->allocReg(_Fs_, _XYZW_PS ? -1 : 0, _X_Y_Z_W);
 		if (_It_)
 			mVUsaveReg(Fs, xComplexAddress(gprT2q, ptr, gprT1q), _X_Y_Z_W, 1);
@@ -1847,13 +2718,26 @@ void mVU_XGKICK_(u32 addr)
 
 void _vuXGKICKTransfermVU(bool flush)
 {
+	static constexpr u32 buffered_packet = 0x80000000u;
 	while (VU1.xgkickenable && (flush || VU1.xgkickcyclecount >= 2))
 	{
 		u32 transfersize = 0;
+		if (VU1.xgkickdiff & buffered_packet)
+		{
+			VU1.xgkickdiff &= ~buffered_packet;
+			gifUnit.lastTranType = GIF_TRANS_XGKICK;
+			if (!gifUnit.CanDoPath1())
+				gifUnit.stat.P1Q = 1;
+			gifUnit.Execute(false, false);
+			if (VU1.xgkickendpacket)
+			{
+				VU1.xgkickenable = false;
+				break;
+			}
+		}
 
 		if (VU1.xgkicksizeremaining == 0)
 		{
-			//VUM_LOG("XGKICK reading new tag from %x", VU1.xgkickaddr);
 			u32 size = gifUnit.GetGSPacketSize(GIF_PATH_1, vuRegs[1].Mem, VU1.xgkickaddr, ~0u, flush);
 			VU1.xgkicksizeremaining = size & 0xFFFF;
 			VU1.xgkickendpacket = size >> 31;
@@ -1861,12 +2745,9 @@ void _vuXGKICKTransfermVU(bool flush)
 
 			if (VU1.xgkicksizeremaining == 0)
 			{
-				//VUM_LOG("Invalid GS packet size returned, cancelling XGKick");
 				VU1.xgkickenable = false;
 				break;
 			}
-			//else
-				//VUM_LOG("XGKICK New tag size %d bytes EOP %d", VU1.xgkicksizeremaining, VU1.xgkickendpacket);
 		}
 
 		if (!flush)
@@ -1879,8 +2760,6 @@ void _vuXGKICKTransfermVU(bool flush)
 			transfersize = VU1.xgkicksizeremaining;
 			transfersize = std::min(transfersize, VU1.xgkickdiff);
 		}
-
-		//VUM_LOG("XGKICK Transferring %x bytes from %x size %x", transfersize * 0x10, VU1.xgkickaddr, VU1.xgkicksizeremaining);
 
 		// Would be "nicer" to do the copy until it's all up, however this really screws up PATH3 masking stuff
 		// So lets just do it the other way :)
@@ -1906,35 +2785,192 @@ void _vuXGKICKTransfermVU(bool flush)
 		VU1.xgkickdiff = 0x4000 - VU1.xgkickaddr;
 
 		if (VU1.xgkickendpacket && !VU1.xgkicksizeremaining)
-		//	VUM_LOG("XGKICK next addr %x left size %x", VU1.xgkickaddr, VU1.xgkicksizeremaining);
-		//else
 		{
-			//VUM_LOG("XGKICK transfer finished");
 			VU1.xgkickenable = false;
 			// Check if VIF is waiting for the GIF to not be busy
 		}
 	}
-	//VUM_LOG("XGKick run complete Enabled %d", VU1.xgkickenable);
+}
+
+void _vuXGKICKPreparemVU()
+{
+	const u32 size = gifUnit.GetGSPacketSize(GIF_PATH_1, vuRegs[1].Mem,
+		VU1.xgkickaddr, ~0u, true);
+	VU1.xgkicksizeremaining = size & 0xffff;
+	VU1.xgkickendpacket = size >> 31;
+	VU1.xgkickdiff = 0x4000 - VU1.xgkickaddr;
+	if (VU1.xgkicksizeremaining == 0)
+		VU1.xgkickenable = false;
+}
+
+static __fi void mVUclampXgkickBytes(const xRegister32& byte_count)
+{
+	xCMP(byte_count, ptr32[&VU1.xgkicksizeremaining]);
+	xCMOVA(byte_count, ptr32[&VU1.xgkicksizeremaining]);
+	xCMP(byte_count, ptr32[&VU1.xgkickdiff]);
+	xCMOVA(byte_count, ptr32[&VU1.xgkickdiff]);
 }
 
 static __fi void mVU_XGKICK_SYNC(mV, bool flush)
 {
-	mVU.regAlloc->flushCallerSavedRegisters();
+	if (flush)
+	{
+		mVU.regAlloc->flushCallerSavedRegisters();
+		xTEST(ptr32[&VU1.xgkickenable], 0x1);
+		xForwardJZ32 flush_skip_xgkick;
+		xADD(ptr32[&VU1.xgkickcyclecount], mVUlow.kickcycles);
+		mVUbackupRegs(mVU, true, true);
+		xFastCall(_vuXGKICKTransfermVU, true);
+		mVUrestoreRegs(mVU, true, true);
+		flush_skip_xgkick.SetTarget();
+		return;
+	}
 
 	// Add the single cycle remainder after this instruction, some games do the store
 	// on the second instruction after the kick and that needs to go through first
 	// but that's VERY close..
 	xTEST(ptr32[&VU1.xgkickenable], 0x1);
 	xForwardJZ32 skipxgkick;
-	xADD(ptr32[&VU1.xgkickcyclecount], mVUlow.kickcycles-1);
+	xADD(ptr32[&VU1.xgkickcyclecount], mVUlow.kickcycles - 1);
 	xCMP(ptr32[&VU1.xgkickcyclecount], 2);
 	xForwardJL32 needcycles;
-	mVUbackupRegs(mVU, true, true);
-	xFastCall(_vuXGKICKTransfermVU, flush);
-	mVUrestoreRegs(mVU, true, true);
+
+	if (THREAD_VU1)
+	{
+		mVUbackupRegs(mVU, true, true);
+		xFastCall(_vuXGKICKTransfermVU, false);
+		mVUrestoreRegs(mVU, true, true);
+	}
+	else
+	{
+		Gif_Path& path = gifUnit.gifPath[GIF_PATH_1];
+		const xRegister32& transfer_size = r10d;
+		const xRegister32& transferred_size = r9d;
+		const xRegister32& copy_value = r11d;
+		std::array<std::optional<xForwardJump32>, 4> fast_failures;
+		xPUSH(r9);
+		xPUSH(r10);
+		xPUSH(r11);
+		xCMP(ptr32[&VU1.xgkicksizeremaining], 0);
+		fast_failures[0].emplace(Jcc_Equal);
+		xTEST(ptr32[&VU1.xgkickdiff], 0x80000000u);
+		fast_failures[1].emplace(Jcc_NotZero);
+		xMOV(transfer_size, ptr32[&VU1.xgkickcyclecount]);
+		xSHL(transfer_size, 3);
+		mVUclampXgkickBytes(transfer_size);
+		xMOV(transferred_size, transfer_size);
+		xMOV(gprT1, ptr32[&path.curSize]);
+		xADD(gprT1, transfer_size);
+		xCMP(gprT1, ptr32[&path.buffSize]);
+		fast_failures[2].emplace(Jcc_Above);
+
+		// Mirror CopyGSPacketData()'s MTGS ownership check before writing directly.
+		// MTGS only decreases readAmount, so its concurrent progress can only make a
+		// failed check conservative. Plain aligned loads have acquire semantics on x86.
+		xMOV(gprT2, ptr32[&path.readAmount]);
+		xADD(gprT2, ptr32[&path.gsPack.readAmount]);
+		xForwardJZ32 fast_no_pending_reads;
+		xNEG(gprT2);
+		xADD(gprT2, ptr32[&path.curOffset]);
+		xSUB(gprT2, ptr32[&path.gsPack.size]);
+		xForwardJGE32 fast_reads_behind_write;
+		xADD(gprT2, ptr32[&path.buffLimit]);
+		xCMP(gprT2, gprT1);
+		fast_failures[3].emplace(Jcc_LessOrEqual);
+		fast_no_pending_reads.SetTarget();
+		fast_reads_behind_write.SetTarget();
+
+		// Buffer all bytes at their hardware read time. Parser-visible work is deferred
+		// until a full XGKICK boundary, where allocator state is already synchronized.
+		xMOV(gprT1q, ptr64[&path.buffer]);
+		xMOV(gprT2, ptr32[&path.curSize]);
+		xADD(gprT1q, gprT2q);
+		xMOV64(gprT2q, reinterpret_cast<uptr>(VU1.Mem));
+		xMOV(copy_value, ptr32[&VU1.xgkickaddr]);
+		xADD(gprT2q, r11);
+		xADD(ptr32[&path.curSize], transfer_size);
+		u8* const copy_loop = xGetPtr();
+		xMOV(r11, ptr64[gprT2q]);
+		xMOV(ptr64[gprT1q], r11);
+		xADD(gprT1q, 8);
+		xADD(gprT2q, 8);
+		xSUB(transfer_size, 8);
+		xJcc32(Jcc_NotZero,
+			static_cast<s32>(reinterpret_cast<sptr>(copy_loop) - (reinterpret_cast<sptr>(xGetPtr()) + 6)));
+
+		xMOV(copy_value, transferred_size);
+		xSHR(copy_value, 3);
+		xSUB(ptr32[&VU1.xgkickcyclecount], copy_value);
+		xADD(ptr32[&VU1.xgkickaddr], transferred_size);
+		xSUB(ptr32[&VU1.xgkicksizeremaining], transferred_size);
+		xSUB(ptr32[&VU1.xgkickdiff], transferred_size);
+		xCMP(ptr32[&VU1.xgkickaddr], 0x4000);
+		xForwardJNE8 fast_no_wrap;
+		xMOV(ptr32[&VU1.xgkickaddr], 0);
+		xMOV(ptr32[&VU1.xgkickdiff], 0x4000);
+		fast_no_wrap.SetTarget();
+		xCMP(ptr32[&VU1.xgkicksizeremaining], 0);
+		xForwardJNE8 fast_packet_incomplete;
+		xOR(ptr32[&VU1.xgkickdiff], 0x80000000u);
+		fast_packet_incomplete.SetTarget();
+		xForwardJump32 fast_success;
+
+		for (std::optional<xForwardJump32>& failure : fast_failures)
+			failure->SetTarget();
+		xPOP(r11);
+		xPOP(r10);
+		xPOP(r9);
+		mVUbackupRegs(mVU, true, true);
+		xFastCall(_vuXGKICKTransfermVU, false);
+		mVUrestoreRegs(mVU, true, true);
+		xForwardJump32 fast_finished;
+		fast_success.SetTarget();
+		xPOP(r11);
+		xPOP(r10);
+		xPOP(r9);
+		fast_finished.SetTarget();
+	}
 	needcycles.SetTarget();
 	xADD(ptr32[&VU1.xgkickcyclecount], 1);
 	skipxgkick.SetTarget();
+}
+
+static __fi void mVU_XGKICK_SYNC_SQI(mV)
+{
+	xTEST(ptr32[&VU1.xgkickenable], 0x1);
+	xForwardJZ32 skip_store_sync;
+	xPUSH(gprT1q);
+	xPUSH(r9);
+	xPUSH(r10);
+	xPUSH(r11);
+
+	std::array<std::optional<xForwardJump32>, 3> no_overlap;
+	xMOV(r9d, ptr32[&VU1.xgkickcyclecount]);
+	xADD(r9d, mVUlow.kickcycles);
+	xCMP(r9d, 2);
+	no_overlap[0].emplace(Jcc_Less);
+	xSHL(r9d, 3);
+	mVUclampXgkickBytes(r9d);
+	xMOV(r10d, ptr32[&VU1.xgkickaddr]);
+	xADD(r9d, r10d);
+	xCMP(gprT1, r9d);
+	no_overlap[1].emplace(Jcc_AboveOrEqual);
+	xMOV(r11d, gprT1);
+	xADD(r11d, 16);
+	xCMP(r11d, r10d);
+	no_overlap[2].emplace(Jcc_BelowOrEqual);
+
+	mVU_XGKICK_SYNC(mVU, false);
+	xForwardJump32 store_sync_finished;
+	for (std::optional<xForwardJump32>& branch : no_overlap)
+		branch->SetTarget();
+	xADD(ptr32[&VU1.xgkickcyclecount], mVUlow.kickcycles);
+	store_sync_finished.SetTarget();
+	xPOP(r11);
+	xPOP(r10);
+	xPOP(r9);
+	xPOP(gprT1q);
+	skip_store_sync.SetTarget();
 }
 
 static __fi void mVU_XGKICK_DELAY(mV)
@@ -1942,11 +2978,6 @@ static __fi void mVU_XGKICK_DELAY(mV)
 	mVU.regAlloc->flushCallerSavedRegisters();
 
 	mVUbackupRegs(mVU, true, true);
-#if 0 // XGkick Break - ToDo: Change "SomeGifPathValue" to w/e needs to be tested
-	xTEST (ptr32[&SomeGifPathValue], 1); // If '1', breaks execution
-	xMOV  (ptr32[&mVU.resumePtrXG], (uptr)xGetPtr() + 10 + 6);
-	xJcc32(Jcc_NotZero, (uptr)mVU.exitFunctXG - ((uptr)xGetPtr()+6));
-#endif
 	xFastCall(mVU_XGKICK_, ptr32[&mVU.VIxgkick]);
 	mVUrestoreRegs(mVU, true, true);
 }
@@ -1962,7 +2993,7 @@ mVUop(mVU_XGKICK)
 		}
 		mVUanalyzeXGkick(mVU, _Is_, 1);
 	}
-		pass2
+	pass2
 	{
 		if (CHECK_XGKICKHACK)
 		{
@@ -1997,6 +3028,13 @@ mVUop(mVU_XGKICK)
 			xMOV(ptr32[&VU1.xgkickaddr], gprT1);
 		}
 		mVU.regAlloc->clearNeeded(regS);
+		if (CHECK_XGKICKHACK && !THREAD_VU1)
+		{
+			mVU.regAlloc->flushCallerSavedRegisters();
+			mVUbackupRegs(mVU, true, true);
+			xFastCall((void*)_vuXGKICKPreparemVU);
+			mVUrestoreRegs(mVU, true, true);
+		}
 		mVU.profiler.EmitOp(opXGKICK);
 	}
 	pass3 { mVUlog("XGKICK vi%02d", _Fs_); }

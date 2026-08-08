@@ -52,11 +52,6 @@ static __ri u32 VU_MAC_UPDATE(s32 shift, VURegs* VU, PS2Float f)
 	return VU_MAC_UPDATE_PS2Float(VU, shift, f);
 }
 
-__fi bool IsOverflowSet(VURegs* VU, s32 shift)
-{
-	return (VU->macflag & (0x1000 << shift));
-}
-
 __fi u32 VU_MACx_UPDATE(VURegs * VU, float x)
 {
 	return VU_MAC_UPDATE(3, VU, x);

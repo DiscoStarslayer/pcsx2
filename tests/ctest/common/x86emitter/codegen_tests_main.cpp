@@ -118,6 +118,34 @@ TEST(CodegenTests, MathTest)
 	CODEGEN_TEST(xDIV(ecx), "f7 f9");
 }
 
+TEST(CodegenTests, ScalarOpcodeMapTest)
+{
+	CODEGEN_TEST(xMUL(ecx, edx), "0f af ca");
+	CODEGEN_TEST(xMUL(ecx, ptr32[r8 + 8]), "41 0f af 48 08");
+	CODEGEN_TEST(xMUL(cx, dx), "66 0f af ca");
+	CODEGEN_TEST(xMUL(cx, ptr16[r8 + 8]), "66 41 0f af 48 08");
+	CODEGEN_TEST(xMUL(ecx, edx, 5), "6b ca 05");
+	CODEGEN_TEST(xMUL(ecx, edx, static_cast<s32>(2246822519u)), "69 ca 77 ca eb 85");
+	CODEGEN_TEST(xMUL(ecx, eax, static_cast<s32>(2654435761u)), "69 c8 b1 79 37 9e");
+	CODEGEN_TEST(xMUL(cx, ptr16[r8 + 8], 0x1234), "66 41 69 48 08 34 12");
+	CODEGEN_TEST(xCMOVNE(r9d, r10d), "45 0f 45 ca");
+	CODEGEN_TEST(xSETNE(ptr8[r8 + 8]), "41 0f 95 40 08");
+	CODEGEN_TEST(xMOVZX(r9d, ptr8[r10 + 8]), "45 0f b6 4a 08");
+	CODEGEN_TEST(xMOVSX(r9, ptr16[r10 + 8]), "4d 0f bf 4a 08");
+	CODEGEN_TEST(xBSF(r9d, ptr32[r10 + 8]), "45 0f bc 4a 08");
+	CODEGEN_TEST(xBTS(r9d, r10d), "45 0f ab d1");
+	CODEGEN_TEST(xBTS(ptr32[r10 + 8], 5), "41 0f ba 6a 08 05");
+	CODEGEN_TEST(xSHLD(r9d, r10d, 5), "45 0f a4 d1 05");
+	CODEGEN_TEST(xSHRD(r9d, r10d, cl), "45 0f ad d1");
+	CODEGEN_TEST(xSHLD(ptr32[r8 + 8], r10d, 5), "45 0f a4 50 08 05");
+	CODEGEN_TEST(xSHRD(ptr32[r8 + 8], r10d, cl), "45 0f ad 50 08");
+	CODEGEN_TEST(xPEXT(ecx, eax, ecx), "c4 e2 7a f5 c9");
+	CODEGEN_TEST(xPDEP(r9, r10, r11), "c4 42 ab f5 cb");
+	CODEGEN_TEST(xANDN_S(r9d, r10d, ptr32[r11 + 8]), "c4 42 28 f2 4b 08");
+	CODEGEN_TEST(xANDN_S(r9d, r10d, ptr32[r12 * 4 + 8 + r11]), "c4 02 28 f2 4c a3 08");
+	CODEGEN_TEST(xMULX(r9d, r10d, r11d), "c4 42 2b f6 cb");
+}
+
 TEST(CodegenTests, BitwiseTest)
 {
 	CODEGEN_TEST(xSHR(r8, cl), "49 d3 e8");

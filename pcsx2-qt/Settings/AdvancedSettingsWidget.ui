@@ -183,33 +183,10 @@
        </layout>
       </item>
       <item row="3" column="0" colspan="2">
-       <widget class="QGroupBox" name="eeSoftFloat">
-        <property name="title">
-         <string>Software Float</string>
+       <widget class="QCheckBox" name="eeSoftFloat">
+        <property name="text">
+         <string>Use Accurate Soft-Float for EE FPU (Slow!)</string>
         </property>
-        <layout class="QGridLayout" name="gridLayout_4">
-         <item row="0" column="1">
-          <widget class="QCheckBox" name="eeSoftMul">
-           <property name="text">
-            <string>Multiplication</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="0">
-          <widget class="QCheckBox" name="eeSoftAddSub">
-           <property name="text">
-            <string>Addition/Subtraction</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="0">
-          <widget class="QCheckBox" name="eeSoftDivSqrt">
-           <property name="text">
-            <string>Division/Square Root</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
        </widget>
       </item>
      </layout>
@@ -256,63 +233,17 @@
        </widget>
       </item>
       <item row="5" column="0" colspan="2">
-       <widget class="QGroupBox" name="vu1SoftFloat">
-        <property name="title">
-         <string>VU1 Software Float</string>
+       <widget class="QCheckBox" name="vu1SoftFloat">
+        <property name="text">
+         <string>Use Accurate Soft-Float for VU1 (Slowest!)</string>
         </property>
-        <layout class="QGridLayout" name="gridLayout_8">
-         <item row="0" column="1">
-          <widget class="QCheckBox" name="vu1SoftMul">
-           <property name="text">
-            <string>Multiplication</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="0">
-          <widget class="QCheckBox" name="vu1SoftAddSub">
-           <property name="text">
-            <string>Addition/Subtraction</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="0">
-          <widget class="QCheckBox" name="vu1SoftDivSqrt">
-           <property name="text">
-            <string>Division/Square Root</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
        </widget>
       </item>
       <item row="2" column="0" colspan="2">
-       <widget class="QGroupBox" name="vu0SoftFloat">
-        <property name="title">
-         <string>VU0 Software Float</string>
+       <widget class="QCheckBox" name="vu0SoftFloat">
+        <property name="text">
+         <string>Use Accurate Soft-Float for VU0 (Slower!)</string>
         </property>
-        <layout class="QGridLayout" name="gridLayout_6">
-         <item row="0" column="1">
-          <widget class="QCheckBox" name="vu0SoftMul">
-           <property name="text">
-            <string>Multiplication</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="0">
-          <widget class="QCheckBox" name="vu0SoftAddSub">
-           <property name="text">
-            <string>Addition/Subtraction</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="0">
-          <widget class="QCheckBox" name="vu0SoftDivSqrt">
-           <property name="text">
-            <string>Division/Square Root</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
        </widget>
       </item>
       <item row="6" column="0" colspan="2">

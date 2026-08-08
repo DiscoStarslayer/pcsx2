@@ -32,6 +32,7 @@ void vuMemReset()
 
 	// === VU0 Initialization ===
 	std::memset(&VU0.ACC, 0, sizeof(VU0.ACC));
+	VU0.accflag = 0;
 	std::memset(VU0.VF, 0, sizeof(VU0.VF));
 	std::memset(VU0.VI, 0, sizeof(VU0.VI));
     VU0.VF[0].f.x = 0.0f;
@@ -42,6 +43,7 @@ void vuMemReset()
 
 	// === VU1 Initialization ===
 	std::memset(&VU1.ACC, 0, sizeof(VU1.ACC));
+	VU1.accflag = 0;
 	std::memset(VU1.VF, 0, sizeof(VU1.VF));
 	std::memset(VU1.VI, 0, sizeof(VU1.VI));
 	VU1.VF[0].f.x = 0.0f;
@@ -82,6 +84,7 @@ bool SaveStateBase::vuMicroFreeze()
 	Freeze(VU0.micro_statusflags);
 	Freeze(VU0.macflag);
 	Freeze(VU0.statusflag);
+	Freeze(VU0.accflag);
 	Freeze(VU0.clipflag);
 	Freeze(VU0.nextBlockCycles);
 	Freeze(VU0.VIBackupCycles);
@@ -121,6 +124,7 @@ bool SaveStateBase::vuMicroFreeze()
 	Freeze(VU1.micro_statusflags);
 	Freeze(VU1.macflag);
 	Freeze(VU1.statusflag);
+	Freeze(VU1.accflag);
 	Freeze(VU1.clipflag);
 	Freeze(VU1.nextBlockCycles);
 	Freeze(VU1.xgkickaddr);

@@ -6,8 +6,8 @@
 #include "VUops.h"
 
 #include "common/AlignedMalloc.h"
-#include "common/Perf.h"
-#include "common/StringUtil.h"
+
+static constexpr size_t mVUsoftDivCapTailReserve = 256;
 
 //------------------------------------------------------------------
 // Micro VU - Main Functions
@@ -26,13 +26,35 @@ void mVUinit(microVU& mVU, uint vuIndex)
 	mVU.progMemMask  =  mVU.progSize-1;
 	mVU.cache        = vuIndex ? SysMemory::GetVU1Rec() : SysMemory::GetVU0Rec();
 	mVU.prog.x86end  = (vuIndex ? SysMemory::GetVU1RecEnd() : SysMemory::GetVU0RecEnd()) - (mVUcacheSafeZone * _1mb);
+	// Keep the cold DIV cap fallback outside normal program allocation.
+	mVU.prog.x86end -= mVUsoftDivCapTailReserve;
 
 	mVU.regAlloc.reset(new microRegAlloc(mVU.index));
 }
 
 // Resets Rec Data
-void mVUreset(microVU& mVU, bool resetReserve)
+void mVUreset(microVU& mVU)
 {
+	const bool use_soft_float = CHECK_VU_SOFT(mVU.index);
+	const bool use_soft_madd_packed =
+		use_soft_float && g_cpu.vectorISA >= ProcessorFeatures::VectorISA::AVX2;
+
+	if (use_soft_float)
+	{
+		MicroVUSoftFloatTables::InitializeCorrectionTables();
+
+		if (!mVU.softBoothCache)
+			mVU.softBoothCache = std::make_unique<microVUSoftBoothCacheEntry[]>(mVUsoftBoothCacheSize);
+		if (!mVU.softSrtReciprocalCache)
+			mVU.softSrtReciprocalCache =
+				std::make_unique<microVUSoftUnaryCacheEntry[]>(mVUsoftLowerCacheSize);
+		if (!mVU.softDivCache)
+			mVU.softDivCache = std::make_unique<microVUSoftLowerCacheEntry[]>(mVUsoftLowerCacheSize);
+		if (!mVU.softSqrtCache)
+			mVU.softSqrtCache = std::make_unique<microVUSoftUnaryCacheEntry[]>(mVUsoftLowerCacheSize);
+		if (!mVU.softRsqrtCache)
+			mVU.softRsqrtCache = std::make_unique<microVUSoftLowerCacheSet[]>(mVUsoftLowerCacheSize);
+	}
 	if (THREAD_VU1)
 	{
 		DevCon.Warning("mVU Reset");
@@ -51,7 +73,29 @@ void mVUreset(microVU& mVU, bool resetReserve)
 	mVUGenerateWaitMTVU(mVU);
 	mVUGenerateCopyPipelineState(mVU);
 	mVUGenerateCompareState(mVU);
-
+	if (use_soft_float)
+	{
+		mVUGenerateSoftAddExactLaneKernel(mVU);
+		mVUGenerateSoftAddLaneRepairKernel(mVU);
+		mVUGenerateSoftMulExactKernel(mVU);
+		mVUGenerateSoftMulExactVectorKernel(mVU);
+		mVUGenerateSoftMulBoothPackedKernel(mVU);
+		if (use_soft_madd_packed)
+			mVUGenerateSoftMaddPackedKernels(mVU);
+		mVUGenerateSoftMaddIntegratedLaneKernel(mVU);
+		mVUGenerateSoftMaddExactVectorKernels(mVU);
+		mVUGenerateLowerSrtReciprocalSoftExactKernel(mVU);
+		const mVUSoftDivCapTailPatch div_cap_tail = mVUGenerateLowerDivSoftExactKernel(mVU);
+		mVUGenerateLowerSqrtSoftExactKernel(mVU);
+		mVUGenerateLowerRsqrtSoftExactKernel(mVU);
+		u8* const main_region_end = xGetPtr();
+		u8* const rec_end = mVU.index ? SysMemory::GetVU1RecEnd() : SysMemory::GetVU0RecEnd();
+		u8* const tail_begin = rec_end - mVUsoftDivCapTailReserve;
+		xSetPtr(tail_begin);
+		mVUGenerateLowerDivSoftCapTail(div_cap_tail);
+		pxAssert(static_cast<size_t>(xGetPtr() - tail_begin) <= mVUsoftDivCapTailReserve);
+		xSetPtr(main_region_end);
+	}
 	mVU.regs().nextBlockCycles = 0;
 	memset(&mVU.prog.lpState, 0, sizeof(mVU.prog.lpState));
 	mVU.profiler.Reset(mVU.index);
@@ -306,154 +350,9 @@ _mVUt __fi void* mVUsearchProg(u32 startPC, uptr pState)
 
 recMicroVU0 CpuMicroVU0;
 recMicroVU1 CpuMicroVU1;
-bool mVU1Stage1NativeAllowed = false;
 
 recMicroVU0::recMicroVU0() { m_Idx = 0; IsInterpreter = false; }
 recMicroVU1::recMicroVU1() { m_Idx = 1; IsInterpreter = false; }
-
-struct mVU1Stage1ScanResult
-{
-	bool native_path = false;
-	const char* reason = "unknown";
-	u32 pc = 0;
-	u32 code = 0;
-};
-
-static bool mVU1UpperOpUsesSoftAddSub(u32 code)
-{
-	switch (code & 0x3f)
-	{
-		case 0x00: case 0x01: case 0x02: case 0x03: // ADDx/y/z/w
-		case 0x04: case 0x05: case 0x06: case 0x07: // SUBx/y/z/w
-		case 0x20: case 0x22: // ADDq/ADDi
-		case 0x24: case 0x26: // SUBq/SUBi
-		case 0x28: case 0x2c: // ADD/SUB
-		case 0x08: case 0x09: case 0x0a: case 0x0b: // MADDx/y/z/w
-		case 0x0c: case 0x0d: case 0x0e: case 0x0f: // MSUBx/y/z/w
-		case 0x21: case 0x23: // MADDq/MADDi
-		case 0x25: case 0x27: // MSUBq/MSUBi
-		case 0x29: case 0x2d: // MADD/MSUB
-			return true;
-		default:
-			break;
-	}
-
-	const u32 upper_op = code & 0x3f;
-	const u32 fd_op = (code >> 6) & 0x1f;
-	if (upper_op == 0x3c || upper_op == 0x3d)
-		return fd_op <= 3 || fd_op == 8 || fd_op == 9 || fd_op == 10 || fd_op == 11;
-	if (upper_op == 0x3e || upper_op == 0x3f)
-		return fd_op <= 3 || fd_op == 8 || fd_op == 9;
-	return false;
-}
-
-static bool mVU1UpperOpUsesSoftMul(u32 code)
-{
-	switch (code & 0x3f)
-	{
-		case 0x08: case 0x09: case 0x0a: case 0x0b: // MADDx/y/z/w
-		case 0x0c: case 0x0d: case 0x0e: case 0x0f: // MSUBx/y/z/w
-		case 0x18: case 0x19: case 0x1a: case 0x1b: // MULx/y/z/w
-		case 0x1c: case 0x1e: // MULq/MULi
-		case 0x21: case 0x23: // MADDq/MADDi
-		case 0x25: case 0x27: // MSUBq/MSUBi
-		case 0x29: case 0x2a: case 0x2d: case 0x2e: // MADD/MUL/MSUB/OPMSUB
-			return true;
-		default:
-			break;
-	}
-
-	const u32 upper_op = code & 0x3f;
-	const u32 fd_op = (code >> 6) & 0x1f;
-	if (upper_op == 0x3c)
-		return fd_op == 2 || fd_op == 3 || fd_op == 6 || fd_op == 7;
-	if (upper_op == 0x3d)
-		return fd_op == 2 || fd_op == 3 || fd_op == 6 || fd_op == 8 || fd_op == 9 || fd_op == 10 || fd_op == 11;
-	if (upper_op == 0x3e)
-		return fd_op == 2 || fd_op == 3 || fd_op == 6 || fd_op == 7 || fd_op == 10 || fd_op == 11;
-	if (upper_op == 0x3f)
-		return fd_op == 2 || fd_op == 3 || fd_op == 6 || fd_op == 8 || fd_op == 9;
-	return false;
-}
-
-static bool mVU1UpperOpIsStage1Native(u32 code)
-{
-	const u32 upper_op = code & 0x3f;
-	const u32 xyzw = (code >> 21) & 0xf;
-	if (upper_op == 0x28 || upper_op == 0x2a || upper_op == 0x2c)
-		return xyzw == 0xf || IsVU1SoftNativeStageAllowed(2);
-	if ((upper_op <= 0x07) || (upper_op >= 0x18 && upper_op <= 0x1b))
-		return IsVU1SoftNativeStageAllowed(3);
-	if (upper_op == 0x1e || upper_op == 0x22 || upper_op == 0x26)
-		return IsVU1SoftNativeStageAllowed(4);
-	if ((upper_op >= 0x08 && upper_op <= 0x0f) || upper_op == 0x23 || upper_op == 0x27 || upper_op == 0x29 || upper_op == 0x2d)
-		return IsVU1SoftNativeStageAllowed(5);
-	if (upper_op == 0x1c)
-		return IsVU1SoftNativeStageAllowed(6);
-	return false;
-}
-
-static bool mVU1LowerOpIsUnsafeForStage1Native(u32 code)
-{
-	const u32 lower_op = code & 0x7f;
-	if ((lower_op >= 0x10 && lower_op <= 0x1c) || (lower_op >= 0x20 && lower_op <= 0x2f))
-		return true;
-	if (lower_op == 0x40)
-	{
-		const u32 t3_op = (code >> 4) & 0x3;
-		const u32 sub_op = (code >> 6) & 0x1f;
-		return t3_op == 0 && sub_op == 27; // XGKICK
-	}
-	return false;
-}
-
-static mVU1Stage1ScanResult mVU1ScanNativeSoftFloatStage1(microVU& mVU, s32 start, s32 end)
-{
-	const bool soft_addsub = CHECK_VU_SOFT_ADDSUB(1) != 0;
-	const bool soft_mul = CHECK_VU_SOFT_MUL(1) != 0;
-	if (!soft_addsub && !soft_mul)
-		return {false, "soft-disabled", static_cast<u32>(start), 0};
-	if (mVU.index != 1)
-		return {false, "not-vu1", static_cast<u32>(start), 0};
-	if (start < 0 || end <= start)
-		return {false, "empty-range", static_cast<u32>(start), 0};
-
-	const u32* micro = reinterpret_cast<u32*>(mVU.regs().Micro);
-	bool has_stage1_native_op = false;
-	bool has_unsafe_lower_op = false;
-	for (u32 byte_pc = static_cast<u32>(start) & ~7u; byte_pc < static_cast<u32>(end); byte_pc += 8)
-	{
-		const u32 pc = ((byte_pc & (mVU.microMemSize - 8)) / 4) + 1;
-		const u32 code0 = micro[pc & mVU.progMemMask];
-		const u32 code1 = micro[(pc ^ 1) & mVU.progMemMask];
-		const bool needs_soft0 = (soft_addsub && mVU1UpperOpUsesSoftAddSub(code0)) || (soft_mul && mVU1UpperOpUsesSoftMul(code0));
-		const bool needs_soft1 = (soft_addsub && mVU1UpperOpUsesSoftAddSub(code1)) || (soft_mul && mVU1UpperOpUsesSoftMul(code1));
-		const bool stage1_native0 = needs_soft0 && mVU1UpperOpIsStage1Native(code0);
-		const bool stage1_native1 = needs_soft1 && mVU1UpperOpIsStage1Native(code1);
-		if (needs_soft0 && !stage1_native0)
-			return {false, "unsupported-upper-soft-op", pc * 4, code0};
-		if (needs_soft1 && !stage1_native1)
-			return {false, "unsupported-upper-soft-op", (pc ^ 1) * 4, code1};
-		has_stage1_native_op |= stage1_native0 || stage1_native1;
-		if (mVU1LowerOpIsUnsafeForStage1Native(code0))
-			has_unsafe_lower_op = true;
-		if (mVU1LowerOpIsUnsafeForStage1Native(code1))
-			has_unsafe_lower_op = true;
-		if (has_stage1_native_op && has_unsafe_lower_op)
-			return {false, "unsafe-lower-op", pc * 4, code0};
-	}
-
-	if (!has_stage1_native_op)
-		return {false, "no-stage1-native-op", static_cast<u32>(start), 0};
-
-	return {true, "accepted", static_cast<u32>(start), 0};
-}
-
-void mVU1UpdateStage1NativeAllowed(microVU& mVU, s32 start, s32 end)
-{
-	const mVU1Stage1ScanResult scan = mVU1ScanNativeSoftFloatStage1(mVU, start, end);
-	mVU1Stage1NativeAllowed = scan.native_path;
-}
 
 void recMicroVU0::Reserve()
 {
@@ -478,7 +377,7 @@ void recMicroVU1::Shutdown()
 
 void recMicroVU0::Reset()
 {
-	mVUreset(microVU0, true);
+	mVUreset(microVU0);
 }
 
 void recMicroVU0::Step()
@@ -489,7 +388,7 @@ void recMicroVU1::Reset()
 {
 	vu1Thread.WaitVU();
 	vu1Thread.Get_MTVUChanges();
-	mVUreset(microVU1, true);
+	mVUreset(microVU1);
 }
 
 void recMicroVU0::SetStartPC(u32 startPC)
@@ -565,68 +464,3 @@ bool SaveStateBase::vuJITFreeze()
 	Freeze(microVU1.prog.lpState);
 	return IsOkay();
 }
-
-#if 0
-
-#include <zlib.h>
-
-void DumpVUState(u32 n, u32 pc)
-{
-	const VURegs& r = vuRegs[n];
-	const microVU& mVU = (n == 0) ? microVU0 : microVU1;
-	static FILE* fp = nullptr;
-	static bool fp_opened = false;
-	static u32 counter = 0;
-
-	u32 first = pc >> 31;
-	pc &= 0x7FFFFFFFu;
-	if (first)
-		counter++;
-
-#if 0
-	if (counter == 184639 && pc == 0x0D70)
-		__debugbreak();
-#endif
-
-	if (counter < 0)
-		return;
-
-	if (!fp_opened)
-	{
-		fp = std::fopen("C:\\Dumps\\comp\\vulog.txt", "wb");
-		fp_opened = true;
-	}
-	if (fp)
-	{
-		const microVU& m = (n == 0) ? microVU0 : microVU1;
-		fprintf(fp, "%08d VU%u SPC:%04X xPC:%04X BRANCH:%04X VIBACKUP:%04X", counter, n, r.start_pc, pc, mVU.branch, mVU.VIbackup);
-#if 1
-		//fprintf(fp, " MEM:%08X", crc32(0, (Bytef*)r.Mem, (n == 0) ? VU0_MEMSIZE : VU1_MEMSIZE));
-		fprintf(fp, " MAC %08X %08X %08X %08X [%08X %08X %08X %08X]", r.micro_macflags[3], r.micro_macflags[2], r.micro_macflags[1], r.micro_macflags[0], m.macFlag[3], m.macFlag[2], m.macFlag[1], m.macFlag[0]);
-		fprintf(fp, " CLIP %08X %08X %08X %08X [%08X %08X %08X %08X]", r.micro_clipflags[3], r.micro_clipflags[2], r.micro_clipflags[1], r.micro_clipflags[0], m.clipFlag[3], m.clipFlag[2], m.clipFlag[1], m.clipFlag[0]);
-		fprintf(fp, " STATUS %08X %08X %08X %08X [%08X %08X %08X %08X]", r.micro_statusflags[3], r.micro_statusflags[2], r.micro_statusflags[1], r.micro_statusflags[0], m.statFlag[3], m.statFlag[2], m.statFlag[1], m.statFlag[0]);
-
-		for (u32 i = 0; i < 32; i++)
-		{
-			const VECTOR& v = r.VF[i];
-			fprintf(fp, " VF%u: %08X%08X%08X%08X (%f,%f,%f,%f)", i, v.UL[3], v.UL[2], v.UL[1], v.UL[0], v.F[3], v.F[2], v.F[1], v.F[0]);
-		}
-
-		for (u32 i = 0; i < 32; i++)
-		{
-			const REG_VI& v = r.VI[i];
-			fprintf(fp, " VI%u: %08X", i, v.UL);
-		}
-
-		fprintf(fp, " ACC: %08X%08X%08X%08X (%f,%f,%f,%f)", r.ACC.UL[3], r.ACC.UL[2], r.ACC.UL[1], r.ACC.UL[0],
-			r.ACC.F[3], r.ACC.F[2], r.ACC.F[1], r.ACC.F[0]);
-		fprintf(fp, " Q: %08X (%f)", r.q.UL, r.q.F);
-		fprintf(fp, " P: %08X (%f)\n", r.p.UL, r.p.F);
-#else
-		fprintf(fp, " REG:%08X\n", crc32(0, (Bytef*)&r, offsetof(VURegs, idx)));
-#endif
-		//fflush(fp);
-	}
-}
-
-#endif

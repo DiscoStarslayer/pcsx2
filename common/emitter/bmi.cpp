@@ -5,18 +5,17 @@
 
 namespace x86Emitter
 {
-
-	const xImplBMI_RVM xMULX = {0xF2, 0x38, 0xF6};
-	const xImplBMI_RVM xPDEP = {0xF2, 0x38, 0xF5};
-	const xImplBMI_RVM xPEXT = {0xF3, 0x38, 0xF5};
-	const xImplBMI_RVM xANDN_S = {0x00, 0x38, 0xF2};
+	const xImplBMI_RVM xMULX = {SIMDInstructionInfo(0xF6).m0f38().dstw().pf2()};
+	const xImplBMI_RVM xPDEP = {SIMDInstructionInfo(0xF5).m0f38().dstw().pf2()};
+	const xImplBMI_RVM xPEXT = {SIMDInstructionInfo(0xF5).m0f38().dstw().pf3()};
+	const xImplBMI_RVM xANDN_S = {SIMDInstructionInfo(0xF2).m0f38().dstw()};
 
 	void xImplBMI_RVM::operator()(const xRegisterInt& to, const xRegisterInt& from1, const xRegisterInt& from2) const
 	{
-		xOpWriteC4(Prefix, MbPrefix, Opcode, to, from1, from2);
+		EmitVEX(info, to, from1.GetId(), from2);
 	}
 	void xImplBMI_RVM::operator()(const xRegisterInt& to, const xRegisterInt& from1, const xIndirectVoid& from2) const
 	{
-		xOpWriteC4(Prefix, MbPrefix, Opcode, to, from1, from2);
+		EmitVEX(info, to, from1.GetId(), from2);
 	}
 } // namespace x86Emitter

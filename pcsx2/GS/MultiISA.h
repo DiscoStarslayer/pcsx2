@@ -48,6 +48,7 @@ struct ProcessorFeatures
 	VectorISA vectorISA;
 	bool hasFMA;
 	bool hasBMI2;
+	bool hasFastPext;
 	bool hasSlowGather;
 #endif
 };

@@ -1094,9 +1094,14 @@ set(pcsx2x86Headers
 	x86/microVU_Misc.h
 	x86/microVU_Misc.inl
 	x86/microVU_Profiler.h
+	x86/microVU_SoftFloat.h
+	x86/microVU_SoftFloatTables.h
+	x86/microVU_SoftFloatTablesRuntime.cpp
 	x86/microVU_Tables.inl
 	x86/microVU_Upper.inl
+	x86/microVU_UpperSoft.inl
 	x86/newVif.h
+	x86/SoftFloatEmitter.h
 	x86/Vif_UnpackSSE.h
 	x86/R5900_Profiler.h
 	)
@@ -1144,6 +1149,17 @@ if(LTO_PCSX2_CORE)
 	fixup_file_properties(PCSX2_LTO)
 else()
 	target_sources(PCSX2 PRIVATE ${pcsx2LTOSources})
+endif()
+
+# Keep the generated correction tables out of LTO and the precompiled-header pipeline
+if(ARCH_X86)
+	set_source_files_properties(x86/microVU_SoftFloatTables.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+	if(MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+		set_source_files_properties(x86/microVU_SoftFloatTables.cpp PROPERTIES COMPILE_OPTIONS "/GL-")
+	else()
+		set_source_files_properties(x86/microVU_SoftFloatTables.cpp PROPERTIES COMPILE_OPTIONS "-fno-lto")
+	endif()
+	target_sources(PCSX2 PRIVATE x86/microVU_SoftFloatTables.cpp)
 endif()
 
 # common Sources

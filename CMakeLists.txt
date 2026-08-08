@@ -66,6 +66,20 @@ add_subdirectory(common)
 # make pcsx2
 add_subdirectory(pcsx2)
 
+# Excluded from normal builds, the generated tables are checked in
+add_executable(microvu_table_generator EXCLUDE_FROM_ALL tools/microvu_table_generator.cpp)
+target_link_libraries(microvu_table_generator PRIVATE Zstd::Zstd)
+if(MSVC)
+	target_compile_options(microvu_table_generator PRIVATE /O2)
+else()
+	target_compile_options(microvu_table_generator PRIVATE -O3)
+endif()
+
+add_custom_target(generate-microvu-softfloat-tables
+	COMMAND $<TARGET_FILE:microvu_table_generator> "${CMAKE_SOURCE_DIR}/pcsx2/x86"
+	DEPENDS microvu_table_generator
+	VERBATIM)
+
 if(ENABLE_QT_UI)
 	add_subdirectory(pcsx2-qt)
 endif()

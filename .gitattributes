@@ -6,3 +6,6 @@
 *.props text eol=crlf
 *.vcxproj text eol=crlf
 *.vcxproj.filters text eol=crlf
+
+# Generated from tools/microvu_table_generator.cpp.
+pcsx2/x86/microVU_SoftFloatTables.cpp linguist-generated=true

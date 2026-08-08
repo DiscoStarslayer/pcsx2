@@ -1,12 +1,9 @@
 // SPDX-FileCopyrightText: 2002-2024 PCSX2 Dev Team
 // SPDX-License-Identifier: GPL-3.0+
 
-#include <stdexcept>
-#include <cmath>
 #include <string>
 #include <sstream>
 #include <iomanip>
-#include <iostream>
 #include <bit>
 #include "common/Pcsx2Defs.h"
 #include "common/BitUtils.h"
@@ -56,7 +53,6 @@ static __fi u32 exponent(u32 x)
 	return (x >> 23) & 0xff;
 }
 
-template <u32 Size>
 struct PS2FloatUnaryCache
 {
 	u32 key = 0;
@@ -65,7 +61,6 @@ struct PS2FloatUnaryCache
 	bool valid = false;
 };
 
-template <u32 Size>
 struct PS2FloatBinaryCache
 {
 	u32 key_a = 0;
@@ -117,7 +112,11 @@ PS2Float PS2Float::AddMulResult(PS2Float mulres)
 
 PS2Float PS2Float::MulAddAcc(PS2Float opsend, PS2Float optend)
 {
-	PS2Float mulres = opsend.Mul(optend);
+	return AddMulResultAcc(opsend.Mul(optend));
+}
+
+PS2Float PS2Float::AddMulResultAcc(PS2Float mulres)
+{
 	PS2Float addres = Add(mulres);
 	u32 rawres = addres.raw;
 	bool oflw = addres.HasOverflow();
@@ -152,7 +151,11 @@ PS2Float PS2Float::SubMulResult(PS2Float mulres)
 
 PS2Float PS2Float::MulSubAcc(PS2Float opsend, PS2Float optend)
 {
-	PS2Float mulres = opsend.Mul(optend);
+	return SubMulResultAcc(opsend.Mul(optend));
+}
+
+PS2Float PS2Float::SubMulResultAcc(PS2Float mulres)
+{
 	PS2Float subres = Sub(mulres);
 	u32 rawres = subres.raw;
 	bool oflw = subres.HasOverflow();
@@ -172,17 +175,17 @@ PS2Float PS2Float::Div(PS2Float divend)
 	u32 b = divend.raw;
 	static constexpr u32 CACHE_SETS = 4096;
 	static constexpr u32 CACHE_WAYS = 4;
-	static thread_local PS2FloatBinaryCache<CACHE_SETS> s_div_cache[CACHE_SETS][CACHE_WAYS];
+	static thread_local PS2FloatBinaryCache s_div_cache[CACHE_SETS][CACHE_WAYS];
 	static thread_local u8 s_div_cache_next[CACHE_SETS]{};
 	const u32 cache_index = ps2FloatCacheIndex(a, b);
-	PS2FloatBinaryCache<CACHE_SETS>* cache_entry = nullptr;
 	for (u32 way = 0; way < CACHE_WAYS; way++)
 	{
-		PS2FloatBinaryCache<CACHE_SETS>& entry = s_div_cache[cache_index][way];
+		PS2FloatBinaryCache& entry = s_div_cache[cache_index][way];
 		if (entry.valid && entry.key_a == a && entry.key_b == b)
 			return ps2FloatCachedResult(entry.raw, entry.flags);
 	}
-	cache_entry = &s_div_cache[cache_index][s_div_cache_next[cache_index]++ & (CACHE_WAYS - 1)];
+	PS2FloatBinaryCache* const cache_entry =
+		&s_div_cache[cache_index][s_div_cache_next[cache_index]++ & (CACHE_WAYS - 1)];
 	auto cacheResult = [&](PS2Float result) {
 		cache_entry->key_a = a;
 		cache_entry->key_b = b;
@@ -273,17 +276,17 @@ PS2Float PS2Float::Sqrt()
 	u32 a = raw;
 	static constexpr u32 CACHE_SETS = 4096;
 	static constexpr u32 CACHE_WAYS = 4;
-	static thread_local PS2FloatUnaryCache<CACHE_SETS> s_sqrt_cache[CACHE_SETS][CACHE_WAYS];
+	static thread_local PS2FloatUnaryCache s_sqrt_cache[CACHE_SETS][CACHE_WAYS];
 	static thread_local u8 s_sqrt_cache_next[CACHE_SETS]{};
 	const u32 cache_index = ps2FloatCacheIndex(a);
-	PS2FloatUnaryCache<CACHE_SETS>* cache_entry = nullptr;
 	for (u32 way = 0; way < CACHE_WAYS; way++)
 	{
-		PS2FloatUnaryCache<CACHE_SETS>& entry = s_sqrt_cache[cache_index][way];
+		PS2FloatUnaryCache& entry = s_sqrt_cache[cache_index][way];
 		if (entry.valid && entry.key == a)
 			return ps2FloatCachedResult(entry.raw, entry.flags);
 	}
-	cache_entry = &s_sqrt_cache[cache_index][s_sqrt_cache_next[cache_index]++ & (CACHE_WAYS - 1)];
+	PS2FloatUnaryCache* const cache_entry =
+		&s_sqrt_cache[cache_index][s_sqrt_cache_next[cache_index]++ & (CACHE_WAYS - 1)];
 	auto cacheResult = [&](PS2Float result) {
 		cache_entry->key = a;
 		cache_entry->raw = result.raw;
@@ -340,6 +343,28 @@ PS2Float PS2Float::Sqrt()
 
 PS2Float PS2Float::Rsqrt(PS2Float other)
 {
+	return RsqrtImpl(other);
+}
+
+PS2Float PS2Float::VuRsqrt(PS2Float other)
+{
+	if (other.IsDenormalized())
+	{
+		PS2Float result(MAX_FLOATING_POINT_VALUE);
+		if (IsZero())
+			result.SetInvalid();
+		else
+			result.SetDivideByZero();
+		if (other.Sign())
+			result.SetInvalid();
+		return result;
+	}
+
+	return RsqrtImpl(other);
+}
+
+PS2Float PS2Float::RsqrtImpl(PS2Float other)
+{
 	const u32 other_abs = other.Abs();
 	if ((other_abs & 0x7F800000) == 0)
 	{
@@ -353,23 +378,20 @@ PS2Float PS2Float::Rsqrt(PS2Float other)
 	if (IsDenormalized())
 		return PS2Float(raw & SIGNMASK);
 
-	if (!IsDenormalized() && (other_abs & 0x7F800000) != 0)
+	const u32 sign = raw & SIGNMASK;
+	const u32 sqrt_exp = (other.Exponent() + 127) >> 1;
+	const s32 cexp = Exponent() - sqrt_exp + 126;
+	if (cexp > 255)
 	{
-		const u32 sign = raw & SIGNMASK;
-		const u32 sqrt_exp = (other.Exponent() + 127) >> 1;
-		const s32 cexp = Exponent() - sqrt_exp + 126;
-		if (cexp > 255)
-		{
-			PS2Float result = PS2Float(sign | PS2Float::MAX_FLOATING_POINT_VALUE);
-			result.SetOverflow();
-			return result;
-		}
-		else if (cexp < 0)
-		{
-			PS2Float result = PS2Float(sign);
-			result.SetUnderflow();
-			return result;
-		}
+		PS2Float result = PS2Float(sign | PS2Float::MAX_FLOATING_POINT_VALUE);
+		result.SetOverflow();
+		return result;
+	}
+	else if (cexp < 0)
+	{
+		PS2Float result = PS2Float(sign);
+		result.SetUnderflow();
+		return result;
 	}
 
 	PS2Float sqrt = PS2Float(other_abs).Sqrt();
@@ -393,7 +415,8 @@ PS2Float PS2Float::ESQUR()
 
 PS2Float PS2Float::ERSQRT()
 {
-	return PS2Float(ONE).Rsqrt(*this);
+	// ERSQRT retains the final redundant SRT digit, unlike Q-unit RSQRT.
+	return PS2Float(ONE).RsqrtImpl(*this);
 }
 
 s32 PS2Float::CompareTo(PS2Float other)
