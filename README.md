@@ -139,7 +139,7 @@ Most games do well with **Multi-Threaded VU** enabled, and **mVU FLag Hack** ena
 
 ## paraLLEl-GS
 
-Reliquary integrates [paraLLEl-GS](https://github.com/DiscoStarslayer/parallel-gs), a Vulkan compute-shader implementation of the PlayStation 2 GS. It aims to combine software-renderer-style accuracy with GPU acceleration, supersampling, and analog-display emulation.
+Reliquary integrates [paraLLEl-GS](https://github.com/Arntzen-Software/parallel-gs), a Vulkan compute-shader implementation of the PlayStation 2 GS. It aims to combine software-renderer-style accuracy with GPU acceleration, supersampling, and analog-display emulation.
 
 ## Retail and utility media
 
@@ -151,6 +151,6 @@ Mechacon, memory card, DEV9, and DVD paths can be used to emulate tools like HDD
 
 Reliquary is based on [PCSX2](https://github.com/PCSX2/pcsx2) and continues to incorporate upstream emulator improvements. General PCSX2 documentation and project history remain available from the [PCSX2 website](https://pcsx2.net/) and upstream repository. **DO NOT BOTHER UPSTREAM MAINTAINERS WITH ISSUES ON THIS BRANCH.** All issues should be made against this branch and has nothing to do with upstream maintainers.
 
-paraLLEl-GS was created by Hans-Kristian "themaister" Arntzen with contributions from Runar Heyer and other contributors. See the [paraLLEl-GS README](https://github.com/DiscoStarslayer/parallel-gs#readme).
+paraLLEl-GS was created by Hans-Kristian "themaister" Arntzen with contributions from Runar Heyer and other contributors. See the [paraLLEl-GS README](https://github.com/Arntzen-Software/parallel-gs).
 
 PCSX2 Reliquary is distributed under the GNU General Public License version 3. See [COPYING.GPLv3](COPYING.GPLv3) for the license text.
