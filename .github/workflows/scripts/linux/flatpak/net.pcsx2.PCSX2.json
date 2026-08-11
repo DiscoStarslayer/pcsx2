@@ -12,6 +12,12 @@
       "version": "25.08",
       "add-ld-path": ".",
       "autodownload": true
+    },
+    "org.freedesktop.Platform.VulkanLayer.gamescope": {
+      "directory": "lib/extensions/vulkan/gamescope",
+      "version": "25.08",
+      "autodownload": true,
+      "autodelete": false
     }
   },
   "command": "pcsx2-qt",
@@ -23,7 +29,9 @@
     "--socket=fallback-x11",
     "--socket=pulseaudio",
     "--talk-name=org.freedesktop.ScreenSaver",
-    "--filesystem=xdg-run/gamescope-0:ro"
+    "--filesystem=xdg-run/gamescope-0:ro",
+    "--env=LD_LIBRARY_PATH=/usr/lib/extensions/vulkan/gamescope/lib",
+    "--env=XDG_DATA_DIRS=/app/share:/usr/lib/extensions/vulkan/share:/usr/share:/usr/share/runtime/share:/run/host/user-share:/run/host/share"
   ],
   "modules": [
     "modules/10-libpcap.json",
@@ -76,7 +84,8 @@
         "${FLATPAK_BUILDER_BUILDDIR}/.github/workflows/scripts/linux/generate-metainfo.sh \"${FLATPAK_BUILDER_BUILDDIR}/net.pcsx2.PCSX2.metainfo.xml\"",
         "cat \"${FLATPAK_BUILDER_BUILDDIR}/net.pcsx2.PCSX2.metainfo.xml\"",
         "install -Dm644 \"${FLATPAK_BUILDER_BUILDDIR}/net.pcsx2.PCSX2.metainfo.xml\" \"${FLATPAK_DEST}/share/metainfo/net.pcsx2.PCSX2.metainfo.xml\"",
-        "mkdir -p \"${FLATPAK_DEST}/lib/ffmpeg\""
+        "mkdir -p \"${FLATPAK_DEST}/lib/ffmpeg\"",
+        "mkdir -p \"${FLATPAK_DEST}/lib/extensions/vulkan/gamescope\""
       ]
     }
   ]
