@@ -1,174 +1,156 @@
 # PCSX2 Reliquary
 
-PCSX2 Reliquary is a PCSX2 fork focused on accurate emulation of security flows and esoteric PS2-derived hardware.
+PCSX2 Reliquary is an experimental fork of [PCSX2](https://github.com/PCSX2/pcsx2) focused on properly modeling security flows, PlayStation 2 arcade hardware, and accuracy focused compatibility work.
 
-It targets platforms and software outside the usual retail console path, including systems such as the Konami Python 1 & 2, and Namco System families.
+<!-- TOC -->
+* [Feature overview](#feature-overview)
+* [Getting started](#getting-started)
+* [Required dumps and device data](#required-dumps-and-device-data)
+* [BIOS and security configuration](#bios-and-security-configuration)
+* [Mechacon Key material](#mechacon-key-material)
+* [Memory-card authentication](#memory-card-authentication)
+* [Konami Python Game Files](#konami-python-game-files)
+* [HDD, CF, and CHD overlays](#hdd-cf-and-chd-overlays)
+* [Accurate soft-float](#accurate-soft-float)
+* [paraLLEl-GS](#parallel-gs)
+* [Retail and utility media](#retail-and-utility-media)
+* [Upstream and license](#upstream-and-license)
+<!-- TOC -->
 
-## Features
+## Feature overview
 
-- Full security process support end to end.
-- Bring your own keys.
-- Support for all Konami Python 2 titles.
-- Support for all Konami Pyhton 1 titles.
-- Support for CHD-compressed internal HDD images with writable overlays.
-- Switch keying mode between Developer, Retail, Arcade, and Prototype on both mechacon and memory cards.
-- Support raw PS2 memory card dumps with proper keying.
-- Support for utility discs such as HDD installers and DVD installers.
-- Boots COH memory card dongles when configured in Arcade mode.
-- FireWire Implementation Foundation.
+| Area                                | Status                                                                                                                      |
+|-------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
+| Retail PS2 emulation                | Synced monthly with upstream PCSX2                                                                                          |
+| Accurate soft-float recompiler      | Optional EE FPU, VU0, and VU1 soft-float recompilers                                                                        |
+| ParaLLEl-GS                         | Experimental Vulkan-based GS renderer with supersampling and analog-display emulation, targeting software renderer accuracy |
+| Optional Mechacon security paths    | Selectable retail, development, prototype, and arcade key-store modes, skipped if not provided                              |
+| DVD Player Support                  | Requires properly setup mechacon keys, NVRAM and ROM1 dump                                                                  |
+| HDD Install Disks and Game Installs | Requires properly setup mechacon keys as well as valid NVRAM and Mech Version file                                          |
+| FireWire integration                | Foundational FireWire emulation unlocks titles relying on initalization                                                     |
+| Konami Python 1                     | `.py1` game entries, P1IO/FireWire emulation, HDD/CF media, dongles, and memory card authentication                         |
+| Konami Python 2                     | `.py2` game entries, P2IO emulation, HDD security, dongles, e-amuse cards, and game-specific configuration                  |
+| CHD-backed HDD and CF media         | Full CHD image support for HDD and CF card images                                                                           |
 
-## What This Fork Is For
-PCSX2 Reliquary exists for preservation, research, and compatibility work around the parts of the PS2 ecosystem that most emulators never needed to care about.
+## Getting started
 
-## Status
+Check the fork's [Releases page](https://github.com/DiscoStarslayer/pcsx2/releases) for published packages. Reliquary uses the same general setup as upstream PCSX2, with additional BIOS and security configuration described below.
 
-Current work is centered on bringing up uncommon PS2-adjacent hardware cleanly while keeping the security and memory card paths accurate and configurable.
+For Konami Python 1 titles, ensure an arcade BIOS dump is configured and provided in the BIOS selection menu.
 
-This is an experimental fork aimed at preservation, research, and hardware-specific compatibility work.
+## Required dumps and device data
 
-## Configuration
+The exact files depend on the target system.
 
-### Mechacon
-Mechacon keystore is configured under the advanced menu tab
-![mechacon-config.png](docs/mechacon-config.png)
+| Data                                             | Used for                                                              | Required Retail | Required Python 1 | Required Python 2 |
+|--------------------------------------------------|-----------------------------------------------------------------------|-----------------|-------------------|-------------------|
+| BIOS ROM                                         | Device and game boot, initial IRX load                                | YES             | YES               | YES               |
+| NVRAM, MEC file                                  | Console identity, region data, i.Link identity, and mechacon behavior | NO              | YES               | YES               |
+| MG Keys                                          | DNAs, Memory card auth, hdd KELF signing and verification             | NO              | YES               | YES               |
+| HDD ID                                           | DNAs HDD-bound authentication, can be null for fresh installs         | NO              | NO                | YES               |
+| P1IO board boot ROM, config ROM, BBSRAM          | Python 1 P1IO behavior and board state                                | NO              | YES               | NO                |
+| Internal, external, black, and white dongle data | Game, network and IO board auth                                       | NO              | YES               | YES               |
+| Memory card ID                                   | Boot dongles, COH cards, card authentication                          | NO              | YES               | NO                |
+| Player card IDs                                  | E-amuse card input                                                    | NO              | YES               | YES               |
 
-### BIOS
-You should be running off a **FULL BIOS DUMP**. This means you need not only the bios bin file from the system you wish to boot, but also it's associated NV Ram and Mechacon config sector. This is essential for proper iLinkID matching and security to pass. [biosdrain](https://github.com/F0bes/biosdrain) is a good utility for this.
-The associated files should share the name of the base bios dump (.bin/.rom0) and live in the same folder
-![bios-dump.png](docs/bios-dump.png)
+## BIOS and security configuration
 
-### Memory Card
-Each memory card slot has its own configuration. Each memory card has it's own security processor with it's own keys, particularly the conquest cards for Soul Calibur have different key configuration than the booting dongle.
+For full system emulation, use a complete BIOS dump rather than only a ROM image. Place the BIOS ROM and its matching `.nvm`, `.mec`, `.rom1`, and optionally `.rom2` files in the BIOS directory with the same base filename:
 
-Here is an example for a Konami Python 1 and Namco System 2x6 config
-![memorycard-config.png](docs/memorycard-config.png)
-
-Memory card IDs are currently hard-coded as `MechaPwn`. This is the same ID that is used in sd2psx so raw memory card images can be used between real hardware and this emulator easily.
-PCSX2 memory cards expect the ECC data to be present. Some memorycard dumping utilities dump without hte ECC data, but that can easily be recovered using a tool like [this](https://github.com/ffgriever-pl/PS2-ECC-Memory-Card-Converter).
-
-### Konami Python 2
-Python 2 games require pairing of the game hdd image, the associated nvram, the white and black dongle data, as well as other hardware specifics like your e-amuse card id. This can all be configured through a `.py2` file that the game library scanner can read and interpret. Details on this file format are listed in this [wiki article](https://github.com/987123879113/pcsx2/wiki/PY2-Game-Entry-File-Example).
-
-Python 2 HDD images can be provided as either raw `.raw` files or CHD-compressed `.chd` files. CHD images are opened read-only as the base image to reduce collection size, while any writes made by the emulated HDD are stored in a separate writable overlay under `hdd-overlays/` in the emulator settings directory. This keeps the compressed source CHD unchanged and allows per-install or per-user runtime data to persist. To reset a CHD-backed HDD to its base image, close the emulator and delete the matching `.overlay` and `.map` files.
-
-**Ensure the mechacon keys are set properly in the advanced settings menu and that the key mode is set to "Retail"**
-
-Here is an example config for SuperNova 2
-```yaml
-[Game]
-; Friendly name to display in the game list
-Name="DDR SuperNova 2"
-
-; Path to HDD image file.
-; Note: For Windows you must use \\ instead of just \ for file paths or it WILL NOT WORK.
-HddImagePath=gdj_jaa_2007100800.chd
-
-; HDD ID corresponding to the HDD image (required for unpatched drives)
-HddIdPath=ps2_hdd_id
-
-; NvRam corresponding to the HDD image (required for unpatched drives)
-NvRamPath=ps2_nvram
-
-; Black and white dongle files (required for unpatched games)
-; Format of binary dongle file is:
-; (Old format)
-; 8 bytes - serial ID
-; 32 bytes - encrypted dongle payload
-;
-; OR
-;
-; (MAME format)
-; 32 bytes - encrypted dongle payload
-; 8 bytes - serial ID
-DongleBlackPath=ds2430_black_gqgdjjaa.bin
-DongleWhitePath=ds2430_white_gqfdhjaa.bin
-
-; Input types
-; 0 = Drummania
-; 1 = Guitar Freaks
-; 2 = Dance Dance Revolution
-; 3 = Toy's March
-; 4 = Thrill Drive 3
-; 5 = Dance 86.4 Funky Radio Station
-InputType=2
-
-; DIP Switches 1234 (NEW FORMAT)
-; Change each individual dipswitch to true or false
-DIPSW1=false
-DIPSW2=false
-DIPSW3=false
-DIPSW4=false
-
-; Optional, extended pnach patch file
-PatchFile=ddrsn2j.pnach
-
-; Force 31 kHz mode
-; Will cause the top of the screen to not refresh in Guitar Freaks, Drummania, Toy's March (all GFDM engine-based games) which also occurs on real hardware.
-Force31kHz=0
-
-; Card files are text files with the 16 character card ID.
-; Optional. You'll know if you have a need for this.
-Player1Card=card1.txt
-; Player2Card=card2.txt
-
-; (RECOMMENDED) Manually set a unique ID number to the game as the CRC value.
-; If this is not manually set then random number will be generated every time the file is added to the game list, resulting in a new gamesettings .ini to be created for the game each time it's newly imported so settings may not be shared as expected.
-; WARNING: If you manually set this value then please make sure that the unique ID does not clash with any other game entries or else there may be bugs with game settings.
-UniqueId=334281
-
-; Manually set the region on the game list when imported
-; Optional, will default to "NTSC-J".
-; See wiki page for list of valid region codes.
-; Region=NTSC-J
+```text
+SCPH-xxxxx.rom0
+SCPH-xxxxx.nvm
+SCPH-xxxxx.mec
+SCPH-xxxxx.rom1
+SCPH-xxxxx.rom2
 ```
 
-The Python 2 IO board (P2IO) is available as a USB device in the controller configuration screen. It must be plugged into port 1 for the inputs and dongles to be authenticated correctly.
-![p2io-config.png](docs/p2io-config.png)
+The NVRAM contains console-specific data, including the i.Link ID, while the MEC file identifies the mechacon version. Reliquary can create fallback data when companion files are absent, but generated values are not a substitute for matching hardware data when a security flow validates console identity. [BIOSDrain](https://github.com/F0bes/biosdrain) can be used to dump a console BIOS.
 
-### Konami Python 1
-Python 1 games require a COH bios, configured mechacon keys, configured arcade override keys and accurate IO Board dumps.
+![Complete BIOS dump in the BIOS directory](docs/bios-dump.png)
 
-This is all configured through a .py1 file that the game library scanner can read and interpret. HDD and CF images can be loaded directly as either `.raw` or `.chd` files. Any changes to `.chd` files will be written to the PCSX2 settings directory under `hdd-overlays`. To reset a CHD-backed HDD to its base image, close the emulator and delete the matching .overlay and .map files.
+Reliquary provides separate **Retail BIOS** and **Arcade BIOS** selectors. Python 1 games load the arcade BIOS and fall back to the retail BIOS if missing. Python 2 entries use the retail BIOS path.
 
-Here is an example config for Pop'n Music 14
-```yaml
-[Game]
-; Name of the game that appears in the game list
-Name=Pop'n Music 14
-; Path to the hdd image to load for the title
-HddImagePath=popn14/popn14.chd
-; Path to the CF image to load for the title
-; Games use either a CF or HDD image, but update kits can use CF cards to perform the updates
-; CF Cards also have a MBR + FAT16 container around the pythonFS, this is handled automatically
-; CfImagePath=
-; Battery backed sram dump. Most games happily initialize an empty sram, some need it for security.
-BbsRamPath=popn14/m48t58y.u48
-; IO Board Boot Rom dump, this is the boot rom for the Python 1 IO board.
-; It contains data important to pass security checks in-game.
-IoBootRomPath=popn14/b22a01.u42
-; IO Board Firmware Config dump. Game expects the IO Board to report a specific OUI from the firewire controller
-IoConfigRomPath=popn14/d72872gc.crom
-; IO Board has a built in ds2430 that contains serial information used in game security
-InternalDonglePath=popn14/ds2430.u3
-; IO Board can also optionally have a round black dongle inserted, most games use this as a backup if internal doesn't match.
-; Some titles require a dongle only
-ExternalDonglePath=popn14/ds2430_black_gnf14jab.u3
-; Memory card dongle dump with ECC data. Most games use the same memory card, but there is an exception for satellite terminals
-MemoryCardDonglePath=popn14/kn00002.ps2
-; Memory card card-id. Important for pairing data on KELFs, not required for boot
-MemoryCardIdPath=popn14/kn00002.id
-; IO Mode configuration. Options are 'PPOOL', 'JVS', 'EXTIO', and 'POPN'
-IoMode=POPN
-; GameConfig loader tries to extract this from the IO Boot rom dump, but this can be inaccurate
-; depending on the quality of the dump or in certain situations like upgrade kits.
-; This option lets you manually override the value
-GameId=GNF14JAB
-```
+## Mechacon Key material
 
-Python 1 controls can be configured under the FireWire menu within the controller configuration screen:
-![p1io-config.png](docs/p1io-config.png)
+Configure the following under **Settings > Advanced > Security Settings**:
 
-Perfect pool will automatically set USB device 1 to Trackball and USB device 2 to Perfect Pool Camera. These can be configured in this menu as well, but Camera setup is very minimal and game isn't really playable.
-### Retail/Utility Disks
-If your bios is a proper dump, and your mechacon and memory cards are setup in Retail mode, then any HDD based functionality will work like a real console. This lets you do things like run the HDD Utility disks, boot FMCB, install game HDD functionality or boot DVD update payloads.
-![hdd-utility.png](docs/hdd-utility.png)
+| Setting                           | Conventional filename | Purpose                                     |
+|-----------------------------------|-----------------------|---------------------------------------------|
+| Mechacon Challenge IV File        | `civ.bin`             | Challenge initialization data               |
+| Mechacon Card Key Store File      | `cks.bin`             | Card key-store data                         |
+| Mechacon Key Store Key File       | `kek.bin`             | Key used to process the encrypted key store |
+| Mechacon Encrypted Key Store File | `eks.bin`             | Encrypted mechacon key-store data           |
+
+All four are required for Python 2 and any authenticated paths on retail. If not provided, will operate in fallback mode which should be enough for retail titles to continue saving.
+
+**Arcade KELF Override KBIT** and **Arcade KELF Override KC** files are required only for Python 1 arcade KELFs.
+
+![Mechacon security settings](docs/mechacon-config.png)
+
+The **Mechacon Key Store Mode** selects the key family exposed by the mechacon path:
+
+| Mode      | Intended path          |
+|-----------|------------------------|
+| Dev       | Dev devices like TOOL  |
+| Retail    | Retail and Python 2    |
+| Prototype | Unknown                |
+| Arcade    | COH hardware, Python 1 |
+
+This selection only really applies to Retail titles. Loading a Python 1 title automatically sets this to Arcade mode. Loading a Python 2 title automatically sets Retail.
+
+**Reliquary includes a fallback for basic retail memory-card behavior when keys are not configured.**
+
+## Memory-card authentication
+
+Each memory-card slot can select its image, key source, and authentication key independently. **Key Source** and **Key** are separate settings:
+
+![Per-slot memory-card security configuration](docs/memorycard-config.png)
+
+Reliquary supports raw PS2 memory-card images with their spare/ECC data. Some dumping tools omit ECC bytes; those images must be converted with something like [PS2 ECC Memory Card Converter](https://github.com/ffgriever-pl/PS2-ECC-Memory-Card-Converter).
+
+## Konami Python Game Files
+
+Reliquary recognizes `.py1` and `.py2` files as games and can boot them directly when provided as a target over CLI. Relative paths are recommended and are resolved from the `.py` file's directory.
+
+See the following pages for more details:
+
+- [Konami Python 1 game-entry reference](docs/python1.md)
+- [Konami Python 2 game-entry reference](docs/python2.md)
+
+## HDD, CF, and CHD overlays
+
+HDD and CF images can be loaded as read-only CHDs. Writes made by the game are stored in an overlay under `hdd-overlays/` in the Reliquary data directory.
+
+## Accurate soft-float
+
+The PlayStation 2's floating-point units do not behave exactly like standard IEEE-754. Reliquary provides independent software-emulation options for the EE FPU, VU0, and VU1 to attempt to accurately represent the PS2 quirks at reasonable performance.
+
+The options are under **Settings > Advanced**:
+![soft-float-config.png](docs/soft-float-config.png)
+
+All three are disabled by default and can be enabled per game. While some games have quite obvious issues around proper float emulation (Stuntman, Driv3r), floating point applies to many parts of a title. Physics, rendering or lighting can be noticeably improved with soft-float.
+
+The optimized soft-float recompilers can use AVX2.
+
+**EE** and **VU0** are generally the most impactful to enable and also the most reasonable to be able to run full speed on powerful enough hardware. **VU1** is generally required to resolve rendering issues and is significantly more expensive and generally scales by the complexity of the scene. Ideally you only enable **VU1** when required.
+
+Most games do well with **Multi-Threaded VU** enabled, and **mVU FLag Hack** enabled for improved speed. **Instant VU1** tends to lower performance if **VU1** is in soft-float mode.
+
+## paraLLEl-GS
+
+Reliquary integrates [paraLLEl-GS](https://github.com/DiscoStarslayer/parallel-gs), a Vulkan compute-shader implementation of the PlayStation 2 GS. It aims to combine software-renderer-style accuracy with GPU acceleration, supersampling, and analog-display emulation.
+
+## Retail and utility media
+
+Mechacon, memory card, DEV9, and DVD paths can be used to emulate tools like HDD Utility discs, Free McBoot, HDD installers, DNAs, DVD playback and updates.
+
+![HDD Utility disc](docs/hdd-utility.png)
+
+## Upstream and license
+
+Reliquary is based on [PCSX2](https://github.com/PCSX2/pcsx2) and continues to incorporate upstream emulator improvements. General PCSX2 documentation and project history remain available from the [PCSX2 website](https://pcsx2.net/) and upstream repository. **DO NOT BOTHER UPSTREAM MAINTAINERS WITH ISSUES ON THIS BRANCH.** All issues should be made against this branch and has nothing to do with upstream maintainers.
+
+paraLLEl-GS was created by Hans-Kristian "themaister" Arntzen with contributions from Runar Heyer and other contributors. See the [paraLLEl-GS README](https://github.com/DiscoStarslayer/parallel-gs#readme).
+
+PCSX2 Reliquary is distributed under the GNU General Public License version 3. See [COPYING.GPLv3](COPYING.GPLv3) for the license text.
