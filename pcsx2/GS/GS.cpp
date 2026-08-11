@@ -65,7 +65,14 @@ Pcsx2Config::GSOptions GSConfig;
 
 static GSRendererType GSCurrentRenderer;
 
-struct FileDeleter { void operator()(FILE *file) { if (file) fclose(file); } };
+struct FileDeleter
+{
+	void operator()(FILE* file)
+	{
+		if (file)
+			fclose(file);
+	}
+};
 std::unique_ptr<FILE, FileDeleter> g_gs_stream;
 
 GSRendererType GSGetCurrentRenderer()
@@ -218,7 +225,19 @@ static bool OpenGSDevice(GSRendererType renderer, bool clear_state_on_fail, bool
 		return false;
 	}
 
-	GSConfig.OsdShowGPU = g_gs_device && GSConfig.OsdShowGPU && g_gs_device->SetGPUTimingEnabled(true);
+	if (g_gs_device)
+	{
+		if (!g_gs_device->SetGPUTimingEnabled(true))
+			GSConfig.OsdShowGPU = false;
+		if (GSConfig.OsdShowGPUStats && !g_gs_device->SetGPUPipelineStatisticsEnabled(true))
+			GSConfig.OsdShowGPUStats = false;
+	}
+	else
+	{
+		// Needs proper testing before these OSD counters can be exposed through parallel-GS.
+		GSConfig.OsdShowGPU = false;
+		GSConfig.OsdShowGPUStats = false;
+	}
 
 	Console.WriteLn(Color_StrongGreen, "%s Graphics Driver Info:", GSDevice::RenderAPIToString(new_api));
 	if (g_gs_device)
@@ -298,7 +317,7 @@ static bool OpenGSRenderer(GSRendererType renderer, u8* basemem)
 	}
 	g_perfmon.Reset();
 
-	const char *env = getenv("GS_STREAM");
+	const char* env = getenv("GS_STREAM");
 	if (env)
 		g_gs_stream.reset(fopen(env, "wb"));
 
@@ -498,8 +517,8 @@ bool GSopen(const Pcsx2Config::GSOptions& config, GSRendererType renderer, u8* b
 	{
 		Host::ReportErrorAsync("Error",
 			fmt::format(TRANSLATE_FS("GS", "Failed to create render device. This may be due to your GPU not supporting the "
-			                               "chosen renderer ({}), or because your graphics drivers need to be updated."),
-			            Pcsx2Config::GSOptions::GetRendererName(GSConfig.Renderer)));
+										   "chosen renderer ({}), or because your graphics drivers need to be updated."),
+				Pcsx2Config::GSOptions::GetRendererName(GSConfig.Renderer)));
 		return false;
 	}
 
@@ -587,7 +606,7 @@ void GSgifTransfer(const u8* mem, u32 size)
 
 	if (g_gs_stream)
 	{
-		auto *f = g_gs_stream.get();
+		auto* f = g_gs_stream.get();
 		const uint8_t type = 0;
 		const uint8_t path = 3;
 		fwrite(&type, sizeof(type), 1, f);
@@ -635,7 +654,7 @@ void GSvsync(u32 field, bool registers_written)
 
 	if (g_gs_stream)
 	{
-		auto *f = g_gs_stream.get();
+		auto* f = g_gs_stream.get();
 
 		const uint8_t priv_type = 3;
 		fwrite(&priv_type, sizeof(priv_type), 1, f);
@@ -902,10 +921,10 @@ std::vector<GSAdapterInfo> GSGetAdapterInfo(GSRendererType renderer)
 			// Dummy info.
 			GSAdapterInfo adapter = {};
 			adapter.name = "default";
-			adapter.fullscreen_modes = { "fullscreen" };
+			adapter.fullscreen_modes = {"fullscreen"};
 			adapter.max_texture_size = 4096;
 			adapter.max_upscale_multiplier = 4;
-			return { adapter };
+			return {adapter};
 		}
 #endif
 
@@ -1054,7 +1073,7 @@ void GSgetStats(SmallStringBase& info)
 				(int)std::ceil(pm.Get(GSPerfMon::RenderPasses)),
 				(int)std::ceil(pm.Get(GSPerfMon::Readbacks)),
 				(int)std::ceil(pm.Get(GSPerfMon::TextureCopies)),
-				(int)std::ceil(pm.Get(GSPerfMon::DepthCopiesROV)),
+				(int)std::ceil(pm.Get(GSPerfMon::TextureCopiesROV)),
 				(int)std::ceil(pm.Get(GSPerfMon::TextureUploads)));
 		}
 	}
@@ -1075,8 +1094,8 @@ void GSgetMemoryStats(SmallStringBase& info)
 
 	const auto format_precision = [](const double megabytes) -> std::string {
 		return (megabytes < 10.0 ?
-			fmt::format("{:.1f}", megabytes) :
-			fmt::format("{:.0f}", std::round(megabytes)));
+					fmt::format("{:.1f}", megabytes) :
+					fmt::format("{:.0f}", std::round(megabytes)));
 	};
 
 	const double targets_MB = get_MB(static_cast<double>(g_texture_cache->GetTargetMemoryUsage()));
@@ -1115,7 +1134,7 @@ void GSgetTitleStats(std::string& info)
 		g_pgs_renderer ? "paraLLEl-GS" :
 
 #endif
-		GSDevice::RenderAPIToString(g_gs_device->GetRenderAPI());
+						 GSDevice::RenderAPIToString(g_gs_device->GetRenderAPI());
 
 	const char* hw_sw_name = (GSCurrentRenderer == GSRendererType::Null) ? " Null" : (GSIsHardwareRenderer() ? " HW" : " SW");
 	const char* deinterlace_mode = deinterlace_modes[static_cast<int>(GSConfig.InterlaceMode)];
@@ -1221,6 +1240,12 @@ void GSUpdateConfig(const Pcsx2Config::GSOptions& new_config)
 		if (!g_gs_device->SetGPUTimingEnabled(true))
 			GSConfig.OsdShowGPU = false;
 	}
+
+	if (GSConfig.OsdShowGPUStats != old_config.OsdShowGPUStats)
+	{
+		if (!g_gs_device->SetGPUPipelineStatisticsEnabled(GSConfig.OsdShowGPUStats))
+			GSConfig.OsdShowGPUStats = false;
+	}
 }
 
 void GSSetSoftwareRendering(bool software_renderer, GSInterlaceMode new_interlace)
@@ -1234,7 +1259,7 @@ void GSSetSoftwareRendering(bool software_renderer, GSInterlaceMode new_interlac
 	{
 		// Config might be SW, and we're switching to HW -> use Auto.
 		const GSRendererType renderer = (software_renderer ? GSRendererType::SW :
-			(GSConfig.Renderer == GSRendererType::SW ? GSRendererType::Auto : GSConfig.Renderer));
+															 (GSConfig.Renderer == GSRendererType::SW ? GSRendererType::Auto : GSConfig.Renderer));
 		if (!GSreopen(false, true, renderer, std::nullopt))
 			pxFailRel("Failed to reopen GS for renderer switch.");
 	}
@@ -1455,14 +1480,14 @@ static void HotkeyAdjustUpscaleMultiplier(const float delta)
 	if (GSCurrentRenderer == GSRendererType::SW || GSCurrentRenderer == GSRendererType::Null)
 	{
 		Host::AddIconOSDMessage("UpscaleMultiplierChanged", ICON_FA_ARROW_UP_RIGHT_FROM_SQUARE,
-								TRANSLATE_STR("GS", "Upscaling can only be changed while using the Hardware Renderer."), Host::OSD_QUICK_DURATION);
+			TRANSLATE_STR("GS", "Upscaling can only be changed while using the Hardware Renderer."), Host::OSD_QUICK_DURATION);
 		return;
 	}
 
 	// Clamp logic mirrors GraphicsSettingsWidget::populateUpscaleMultipliers().
 	float candidate_multiplier = EmuConfig.GS.UpscaleMultiplier + delta;
 	const float max_multiplier = static_cast<float>(std::clamp(GSGetMaxUpscaleMultiplier(g_gs_device->GetMaxTextureSize()),
-													10u, EmuConfig.GS.ExtendedUpscalingMultipliers ? 25u : 12u));
+		10u, EmuConfig.GS.ExtendedUpscalingMultipliers ? 25u : 12u));
 
 	std::string osd_message;
 	if (candidate_multiplier <= 1)
@@ -1478,7 +1503,7 @@ static void HotkeyAdjustUpscaleMultiplier(const float delta)
 	else
 	{
 		osd_message = fmt::format(TRANSLATE_FS("GS", "Upscale multiplier {} to {}x."),
-							  delta > 0 ? TRANSLATE_STR("GS", "increased") : TRANSLATE_STR("GS", "decreased"), candidate_multiplier);
+			delta > 0 ? TRANSLATE_STR("GS", "increased") : TRANSLATE_STR("GS", "decreased"), candidate_multiplier);
 	}
 
 	// Need to calculate our own target resolution. Reading after applying settings is a race condition.
@@ -1488,7 +1513,7 @@ static void HotkeyAdjustUpscaleMultiplier(const float delta)
 
 	//: Leftmost value is an OSD message about the upscale multiplier. Values in parentheses are a resolution width (left) and height (right).
 	Host::AddIconOSDMessage("UpscaleMultiplierChanged", ICON_FA_ARROW_UP_RIGHT_FROM_SQUARE,
-							fmt::format(TRANSLATE_FS("GS", "{} ({} x {})"), osd_message, target_iwidth, target_iheight), Host::OSD_QUICK_DURATION);
+		fmt::format(TRANSLATE_FS("GS", "{} ({} x {})"), osd_message, target_iwidth, target_iheight), Host::OSD_QUICK_DURATION);
 
 	// This is pretty slow. We only really need to flush the TC and recompile shaders.
 	// TODO(Stenzek): Make it faster at some point in the future.
@@ -1657,30 +1682,30 @@ BEGIN_HOTKEY_LIST(g_gs_hotkeys){"Screenshot", TRANSLATE_NOOP("Hotkeys", "Graphic
 			EmuConfig.GS.TVShader = new_shader;
 			MTGS::RunOnGSThread([new_shader]() { GSConfig.TVShader = new_shader; });
 		}},
-		{"CycleBlendingAccuracy", TRANSLATE_NOOP("Hotkeys", "Graphics"), TRANSLATE_NOOP("Hotkeys", "Cycle Blending Accuracy"),
-			[](s32 pressed) {
-				if (pressed)
-					return;
+	{"CycleBlendingAccuracy", TRANSLATE_NOOP("Hotkeys", "Graphics"), TRANSLATE_NOOP("Hotkeys", "Cycle Blending Accuracy"),
+		[](s32 pressed) {
+			if (pressed)
+				return;
 
-				static constexpr std::array<const char*, static_cast<u8>(AccBlendLevel::MaxCount)> s_blending_option_names = {{
-					TRANSLATE_NOOP("Hotkeys_BlendAcc", "Minimum"),
-					TRANSLATE_NOOP("Hotkeys_BlendAcc", "Basic"),
-					TRANSLATE_NOOP("Hotkeys_BlendAcc", "Medium"),
-					TRANSLATE_NOOP("Hotkeys_BlendAcc", "High"),
-					TRANSLATE_NOOP("Hotkeys_BlendAcc", "Full"),
-					TRANSLATE_NOOP("Hotkeys_BlendAcc", "Maximum"),
-				}};
+			static constexpr std::array<const char*, static_cast<u8>(AccBlendLevel::MaxCount)> s_blending_option_names = {{
+				TRANSLATE_NOOP("Hotkeys_BlendAcc", "Minimum"),
+				TRANSLATE_NOOP("Hotkeys_BlendAcc", "Basic"),
+				TRANSLATE_NOOP("Hotkeys_BlendAcc", "Medium"),
+				TRANSLATE_NOOP("Hotkeys_BlendAcc", "High"),
+				TRANSLATE_NOOP("Hotkeys_BlendAcc", "Full"),
+				TRANSLATE_NOOP("Hotkeys_BlendAcc", "Maximum"),
+			}};
 
-				const AccBlendLevel new_blend_mode = static_cast<AccBlendLevel>(
-					(static_cast<u8>(EmuConfig.GS.AccurateBlendingUnit) + 1) % static_cast<u8>(AccBlendLevel::MaxCount));
-				Host::AddKeyedOSDMessage("CycleBlendingAccuracy",
-					fmt::format(
-						TRANSLATE_FS("Hotkeys", "Blending Accuracy set to {}."), s_blending_option_names[static_cast<u8>(new_blend_mode)]),
-					Host::OSD_QUICK_DURATION);
+			const AccBlendLevel new_blend_mode = static_cast<AccBlendLevel>(
+				(static_cast<u8>(EmuConfig.GS.AccurateBlendingUnit) + 1) % static_cast<u8>(AccBlendLevel::MaxCount));
+			Host::AddKeyedOSDMessage("CycleBlendingAccuracy",
+				fmt::format(
+					TRANSLATE_FS("Hotkeys", "Blending Accuracy set to {}."), s_blending_option_names[static_cast<u8>(new_blend_mode)]),
+				Host::OSD_QUICK_DURATION);
 
-				EmuConfig.GS.AccurateBlendingUnit = new_blend_mode;
-				MTGS::RunOnGSThread([new_blend_mode]() { GSConfig.AccurateBlendingUnit = new_blend_mode; });
-			}},
+			EmuConfig.GS.AccurateBlendingUnit = new_blend_mode;
+			MTGS::RunOnGSThread([new_blend_mode]() { GSConfig.AccurateBlendingUnit = new_blend_mode; });
+		}},
 	{"ToggleTextureDumping", TRANSLATE_NOOP("Hotkeys", "Graphics"), TRANSLATE_NOOP("Hotkeys", "Toggle Texture Dumping"),
 		[](s32 pressed) {
 			if (!pressed)

@@ -67,6 +67,35 @@ static std::string getSlotKeyKey(u32 slot)
 	return StringUtil::StdStringFromFormat("Slot%u_Key", slot + 1);
 }
 
+namespace
+{
+	enum MemoryCardListColumn : int
+	{
+		Name,
+		Type,
+		Formatted,
+		LastModified,
+	};
+
+	class MemoryCardListItem : public QTreeWidgetItem
+	{
+	public:
+		using QTreeWidgetItem::QTreeWidgetItem;
+
+		bool operator<(const QTreeWidgetItem& other) const override
+		{
+			const QTreeWidget* tree = treeWidget();
+			const int column = tree ? tree->sortColumn() : 0;
+			if (column == MemoryCardListColumn::LastModified)
+			{
+				return data(MemoryCardListColumn::LastModified, Qt::UserRole).toLongLong() <
+				       other.data(MemoryCardListColumn::LastModified, Qt::UserRole).toLongLong();
+			}
+			return text(column).localeAwareCompare(other.text(column)) < 0;
+		}
+	};
+} // namespace
+
 MemoryCardSettingsWidget::MemoryCardSettingsWidget(SettingsWindow* settings_dialog, QWidget* parent)
 	: SettingsWidget(settings_dialog, parent)
 {
@@ -95,6 +124,11 @@ MemoryCardSettingsWidget::MemoryCardSettingsWidget(SettingsWindow* settings_dial
 	connect(m_ui.renameCard, &QPushButton::clicked, this, &MemoryCardSettingsWidget::renameCard);
 	connect(m_ui.convertCard, &QPushButton::clicked, this, &MemoryCardSettingsWidget::convertCard);
 	connect(m_ui.deleteCard, &QPushButton::clicked, this, &MemoryCardSettingsWidget::deleteCard);
+
+	loadCardListSortState();
+	m_ui.cardList->setSortingEnabled(true);
+	connect(m_ui.cardList->header(), &QHeaderView::sortIndicatorChanged, this,
+		&MemoryCardSettingsWidget::saveCardListSortState);
 
 	refresh();
 }
@@ -402,6 +436,24 @@ void MemoryCardSettingsWidget::swapCards()
 	refresh();
 }
 
+void MemoryCardSettingsWidget::saveCardListSortState()
+{
+	Host::SetBaseIntSettingValue("MemoryCardListView", "SortColumn",
+		m_ui.cardList->header()->sortIndicatorSection());
+	Host::SetBaseBoolSettingValue("MemoryCardListView", "SortDescending",
+		m_ui.cardList->header()->sortIndicatorOrder() == Qt::DescendingOrder);
+	Host::CommitBaseSettingChanges();
+}
+
+void MemoryCardSettingsWidget::loadCardListSortState()
+{
+	int sort_column = Host::GetBaseIntSettingValue("MemoryCardListView", "SortColumn", 0);
+	if (sort_column < 0 || sort_column > MemoryCardListColumn::LastModified)
+		sort_column = MemoryCardListColumn::Name;
+	const bool sort_descending = Host::GetBaseBoolSettingValue("MemoryCardListView", "SortDescending", false);
+	m_ui.cardList->sortByColumn(sort_column, sort_descending ? Qt::DescendingOrder : Qt::AscendingOrder);
+}
+
 static QString getSizeSummary(const AvailableMcdInfo& mcd)
 {
 	if (mcd.type == MemoryCardType::File)
@@ -483,12 +535,17 @@ void MemoryCardListWidget::mouseMoveEvent(QMouseEvent* event)
 
 void MemoryCardListWidget::refresh(SettingsWindow* dialog)
 {
+	// We don't need to sort while it's being repopulated.
+	setSortingEnabled(false);
 	clear();
 
 	// we can't use the in use flag here anyway, because the config may not be in line with per game settings.
 	const std::vector<AvailableMcdInfo> mcds(FileMcd_GetAvailableCards(true));
 	if (mcds.empty())
+	{
+		setSortingEnabled(true);
 		return;
+	}
 
 	std::array<std::string, MemoryCardSettingsWidget::MAX_SLOTS> currentCards;
 	for (u32 i = 0; i < static_cast<u32>(currentCards.size()); i++)
@@ -501,7 +558,7 @@ void MemoryCardListWidget::refresh(SettingsWindow* dialog)
 
 	for (const AvailableMcdInfo& mcd : mcds)
 	{
-		QTreeWidgetItem* item = new QTreeWidgetItem();
+		MemoryCardListItem* item = new MemoryCardListItem();
 		const QDateTime mtime(QDateTime::fromSecsSinceEpoch(static_cast<qint64>(mcd.modified_time)));
 		const bool inUse = (std::find(currentCards.begin(), currentCards.end(), mcd.name) != currentCards.end());
 
@@ -514,9 +571,13 @@ void MemoryCardListWidget::refresh(SettingsWindow* dialog)
 
 		// store formatted metadata
 		item->setData(0, Qt::UserRole, mcd.formatted);
+		item->setData(MemoryCardListColumn::LastModified, Qt::UserRole,
+			static_cast<qint64>(mcd.modified_time));
 
 		addTopLevelItem(item);
 	}
+
+	setSortingEnabled(true);
 }
 
 MemoryCardSlotWidget::MemoryCardSlotWidget(QWidget* parent)
