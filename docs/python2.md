@@ -1,6 +1,6 @@
 # Konami Python 2 Config
 
-## Descriptor syntax
+## Config
 
 A descriptor is an INI file with a single `[Game]` section.
 

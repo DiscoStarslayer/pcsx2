@@ -1,6 +1,6 @@
 # Konami Python 1 Config
 
-## Descriptor syntax
+## Config
 
 A descriptor is an INI file with a single `[Game]` section.
 
@@ -57,7 +57,7 @@ Use either `HddImagePath` or `CfImagePath` for normal game media. A descriptor m
 
 Select the mode matching the board firmware and game. The setting affects P1IO protocol responses as well as which automatic controller bindings are exposed.
 
-## P1IO controls and persistent data
+## P1IO controls
 
 Configure Python 1 inputs under the FireWire section of the controller settings.
 
