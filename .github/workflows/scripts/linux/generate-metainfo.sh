@@ -8,6 +8,9 @@ if [[ $# -lt 1 ]]; then
 fi
 
 OUTFILE=$1
+APP_ID=${PCSX2_APP_ID:-net.pcsx2.PCSX2}
+APP_NAME=${PCSX2_APP_NAME:-PCSX2}
+GITHUB_REPOSITORY=${PCSX2_GITHUB_REPOSITORY:-PCSX2/pcsx2}
 GIT_DATE=$(git log -1 --pretty=%cd --date=iso8601)
 GIT_VERSION=$(git tag --points-at HEAD)
 GIT_HASH=$(git rev-parse HEAD)
@@ -38,7 +41,9 @@ echo "GIT_HASH: ${GIT_HASH}"
 
 cp "${SCRIPTDIR}"/pcsx2-qt.metainfo.xml.in "${OUTFILE}"
 
+sed -i -e "s|@APP_ID@|${APP_ID}|g" "${OUTFILE}"
+sed -i -e "s|@APP_NAME@|${APP_NAME}|g" "${OUTFILE}"
+sed -i -e "s|@GITHUB_REPOSITORY@|${GITHUB_REPOSITORY}|g" "${OUTFILE}"
 sed -i -e "s/@GIT_VERSION@/${GIT_VERSION}/" "${OUTFILE}"
 sed -i -e "s/@GIT_DATE@/${GIT_DATE}/" "${OUTFILE}"
 sed -i -e "s/@GIT_HASH@/${GIT_HASH}/" "${OUTFILE}"
-

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Uses the AppStream standard https://www.freedesktop.org/software/appstream/docs/chap-Metadata.html -->
 <component type="desktop">
-  <id>net.pcsx2.PCSX2</id>
-  <launchable type="desktop-id">net.pcsx2.PCSX2.desktop</launchable>
+  <id>@APP_ID@</id>
+  <launchable type="desktop-id">@APP_ID@.desktop</launchable>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0+</project_license>
-  <name>PCSX2</name>
+  <name>@APP_NAME@</name>
   <developer id="net.pcsx2">
     <name>PCSX2 Team</name>
   </developer>
@@ -15,8 +15,8 @@
     <p>PlayStation 2 and PS2 are registered trademarks of Sony Interactive Entertainment. This application is not affiliated in any way with Sony Interactive Entertainment.</p>
   </description>
   <url type="homepage">https://pcsx2.net/</url>
-  <url type="vcs-browser">https://github.com/PCSX2/pcsx2</url>
-  <url type="bugtracker">https://github.com/PCSX2/pcsx2/issues</url>
+  <url type="vcs-browser">https://github.com/@GITHUB_REPOSITORY@</url>
+  <url type="bugtracker">https://github.com/@GITHUB_REPOSITORY@/issues</url>
   <url type="donation">https://github.com/sponsors/PCSX2</url>
   <url type="faq">https://pcsx2.net/docs/</url>
   <url type="help">https://pcsx2.net/discord</url>
@@ -67,6 +67,6 @@
     <release version="@GIT_VERSION@" date="@GIT_DATE@" />
   </releases>
   <custom>
-    <value key="flathub::manifest">https://raw.githubusercontent.com/PCSX2/pcsx2/@GIT_HASH@/.github/workflows/scripts/linux/flatpak/net.pcsx2.PCSX2.json</value>
+    <value key="flathub::manifest">https://raw.githubusercontent.com/@GITHUB_REPOSITORY@/@GIT_HASH@/.github/workflows/scripts/linux/flatpak/@APP_ID@.json</value>
   </custom>
 </component>

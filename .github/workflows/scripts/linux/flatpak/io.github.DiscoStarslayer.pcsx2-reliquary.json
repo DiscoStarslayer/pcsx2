@@ -1,5 +1,5 @@
 {
-  "app-id": "net.pcsx2.PCSX2",
+  "app-id": "io.github.DiscoStarslayer.pcsx2-reliquary",
   "runtime": "org.kde.Platform",
   "runtime-version": "6.10",
   "sdk": "org.kde.Sdk",
@@ -78,12 +78,13 @@
       ],
       "post-install": [
         "cp -a bin \"${FLATPAK_DEST}\"",
-        "install -Dm644 \"${FLATPAK_BUILDER_BUILDDIR}/bin/resources/icons/AppIconLarge.png\" \"${FLATPAK_DEST}/share/icons/hicolor/512x512/apps/net.pcsx2.PCSX2.png\"",
-        "install -Dm644 \"${FLATPAK_BUILDER_BUILDDIR}/.github/workflows/scripts/linux/pcsx2-qt.desktop\" \"${FLATPAK_DEST}/share/applications/net.pcsx2.PCSX2.desktop\"",
-        "desktop-file-edit --set-key=Icon --set-value=net.pcsx2.PCSX2 \"${FLATPAK_DEST}/share/applications/net.pcsx2.PCSX2.desktop\"",
-        "${FLATPAK_BUILDER_BUILDDIR}/.github/workflows/scripts/linux/generate-metainfo.sh \"${FLATPAK_BUILDER_BUILDDIR}/net.pcsx2.PCSX2.metainfo.xml\"",
-        "cat \"${FLATPAK_BUILDER_BUILDDIR}/net.pcsx2.PCSX2.metainfo.xml\"",
-        "install -Dm644 \"${FLATPAK_BUILDER_BUILDDIR}/net.pcsx2.PCSX2.metainfo.xml\" \"${FLATPAK_DEST}/share/metainfo/net.pcsx2.PCSX2.metainfo.xml\"",
+        "install -Dm644 \"${FLATPAK_BUILDER_BUILDDIR}/bin/resources/icons/AppIconLarge.png\" \"${FLATPAK_DEST}/share/icons/hicolor/512x512/apps/io.github.DiscoStarslayer.pcsx2-reliquary.png\"",
+        "install -Dm644 \"${FLATPAK_BUILDER_BUILDDIR}/.github/workflows/scripts/linux/pcsx2-qt.desktop\" \"${FLATPAK_DEST}/share/applications/io.github.DiscoStarslayer.pcsx2-reliquary.desktop\"",
+        "desktop-file-edit --set-key=Name --set-value=PCSX2-Reliquary \"${FLATPAK_DEST}/share/applications/io.github.DiscoStarslayer.pcsx2-reliquary.desktop\"",
+        "desktop-file-edit --set-key=Icon --set-value=io.github.DiscoStarslayer.pcsx2-reliquary \"${FLATPAK_DEST}/share/applications/io.github.DiscoStarslayer.pcsx2-reliquary.desktop\"",
+        "PCSX2_APP_ID=io.github.DiscoStarslayer.pcsx2-reliquary PCSX2_APP_NAME=PCSX2-Reliquary PCSX2_GITHUB_REPOSITORY=DiscoStarslayer/pcsx2-reliquary ${FLATPAK_BUILDER_BUILDDIR}/.github/workflows/scripts/linux/generate-metainfo.sh \"${FLATPAK_BUILDER_BUILDDIR}/io.github.DiscoStarslayer.pcsx2-reliquary.metainfo.xml\"",
+        "cat \"${FLATPAK_BUILDER_BUILDDIR}/io.github.DiscoStarslayer.pcsx2-reliquary.metainfo.xml\"",
+        "install -Dm644 \"${FLATPAK_BUILDER_BUILDDIR}/io.github.DiscoStarslayer.pcsx2-reliquary.metainfo.xml\" \"${FLATPAK_DEST}/share/metainfo/io.github.DiscoStarslayer.pcsx2-reliquary.metainfo.xml\"",
         "mkdir -p \"${FLATPAK_DEST}/lib/ffmpeg\"",
         "mkdir -p \"${FLATPAK_DEST}/lib/extensions/vulkan/gamescope\""
       ]
