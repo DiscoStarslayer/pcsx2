@@ -167,6 +167,7 @@
     <ClCompile Include="Settings\InputBindingDialog.cpp" />
     <ClCompile Include="Settings\InputBindingWidget.cpp" />
     <ClCompile Include="Settings\ControllerSettingsWindow.cpp" />
+    <ClCompile Include="Settings\AudioLatencySlider.cpp" />
     <ClCompile Include="Settings\AudioSettingsWidget.cpp" />
     <ClCompile Include="Settings\MemoryCardConvertDialog.cpp" />
     <ClCompile Include="Settings\MemoryCardSettingsWidget.cpp" />
@@ -279,6 +280,7 @@
     <QtMoc Include="Settings\FireWireDeviceWidget.h" />
     <QtMoc Include="Settings\ControllerGlobalSettingsWidget.h" />
     <ClInclude Include="Settings\MemoryCardConvertWorker.h" />
+    <ClInclude Include="Settings\AudioLatencySlider.h" />
     <QtMoc Include="Settings\Python1SettingsWidget.h" />
     <QtMoc Include="Settings\Python2SettingsWidget.h" />
     <QtMoc Include="Settings\OsdFontPickerDialog.h" />
