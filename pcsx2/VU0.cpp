@@ -177,6 +177,11 @@ void CTC2() {
 		case REG_R:
 			VU0.VI[REG_R].UL = ((cpuRegs.GPR.r[_Rt_].UL[0] & 0x7FFFFF) | 0x3F800000);
 			break;
+		case REG_STATUS_FLAG:
+			VU0.VI[REG_STATUS_FLAG].UL = (VU0.VI[REG_STATUS_FLAG].UL & 0x3F) |
+				(cpuRegs.GPR.r[_Rt_].UL[0] & 0xFC0);
+			VU0.statusflag = VU0.VI[REG_STATUS_FLAG].UL & 0xFFF;
+			break;
 		case REG_FBRST:
 			VU0.VI[REG_FBRST].UL = cpuRegs.GPR.r[_Rt_].UL[0] & 0x0C0C;
 			if (cpuRegs.GPR.r[_Rt_].UL[0] & 0x1) { // VU0 Force Break

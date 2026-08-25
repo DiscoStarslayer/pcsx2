@@ -46,11 +46,24 @@ static __fi u32 vuApplyFMACStatusFlag(u32 current_status, u32 fmac_status, bool 
 {
 	const u32 current = fmac_status & 0xF;
 	const u32 sticky_source = (fmac_status & VU_FMAC_STICKY_SOURCE_VALID) ? ((fmac_status >> 16) & 0xF) : current;
-	const u32 sticky = sticky_source << 6;
-	const u32 preserved_di = fmac_status & 0xFC0;
+
+	const u32 sticky = write_sticky ? 0 : (sticky_source << 6);
+	const u32 preserved_flags = fmac_status & 0xFC0;
+
 	return write_sticky ?
-		(current_status & 0x30) | preserved_di | sticky | current :
-		(current_status & 0xFF0) | preserved_di | sticky | current;
+		(current_status & 0x30) | preserved_flags | sticky | current :
+		(current_status & 0xFF0) | preserved_flags | sticky | current;
+}
+
+static __fi void vuApplyFMACFlags(VURegs* VU, const fmacPipe& fmac)
+{
+	const bool write_sticky = fmac.flagreg & (1 << REG_STATUS_FLAG);
+	const bool write_fmac = fmac.flagreg & (1 << REG_MAC_FLAG);
+
+	if (write_sticky || write_fmac)
+		VU->VI[REG_STATUS_FLAG].UL = vuApplyFMACStatusFlag(VU->VI[REG_STATUS_FLAG].UL, fmac.statusflag, write_sticky);
+	if (write_fmac)
+		VU->VI[REG_MAC_FLAG].UL = fmac.macflag;
 }
 
 static __fi void vuApplyXYZWResults(VURegs* VU, VECTOR* dst, PS2Float x, PS2Float y, PS2Float z, PS2Float w)
@@ -96,10 +109,7 @@ static __ri bool _vuFMACflush(VURegs* VU)
 		if (VU->fmac[i].flagreg & (1 << REG_CLIP_FLAG))
 			VU->VI[REG_CLIP_FLAG].UL = VU->fmac[i].clipflag;
 
-		// Normal FMAC instructoins only affectx Z/S/I/O, D/I are modified only by FDIV instructions
-		// Sticky flags (Affected by FSSET)
-		VU->VI[REG_STATUS_FLAG].UL = vuApplyFMACStatusFlag(VU->VI[REG_STATUS_FLAG].UL, VU->fmac[i].statusflag, VU->fmac[i].flagreg & (1 << REG_STATUS_FLAG));
-		VU->VI[REG_MAC_FLAG].UL = VU->fmac[i].macflag;
+		vuApplyFMACFlags(VU, VU->fmac[i]);
 
 		VU->fmacreadpos = (VU->fmacreadpos + 1) & 3;
 		VU->fmaccount--;
@@ -197,10 +207,7 @@ void _vuFlushAll(VURegs* VU)
 		if (VU->fmac[i].flagreg & (1 << REG_CLIP_FLAG))
 			VU->VI[REG_CLIP_FLAG].UL = VU->fmac[i].clipflag;
 
-		// Normal FMAC instructoins only affectx Z/S/I/O, D/I are modified only by FDIV instructions
-		// Sticky flags (Affected by FSSET)
-		VU->VI[REG_STATUS_FLAG].UL = vuApplyFMACStatusFlag(VU->VI[REG_STATUS_FLAG].UL, VU->fmac[i].statusflag, VU->fmac[i].flagreg & (1 << REG_STATUS_FLAG));
-		VU->VI[REG_MAC_FLAG].UL = VU->fmac[i].macflag;
+		vuApplyFMACFlags(VU, VU->fmac[i]);
 
 		VU->fmacreadpos = (VU->fmacreadpos + 1) & 3;
 
@@ -853,11 +860,9 @@ static __fi void vuApplyMulStageSticky(VURegs* VU, u32 mul_status_flags, bool wr
 	const u32 final_status_flags = VU->statusflag & 0xF;
 	const u32 vi_mul_status_flags = write_mul_underflow_to_vi ? mul_status_flags : (mul_status_flags & ~0x4u);
 	const u32 preserved_di = 0;
-	const u32 old_sticky = VU->VI[REG_STATUS_FLAG].UL & 0x3C0;
-	const u32 vi_sticky = (old_sticky | ((final_status_flags | vi_mul_status_flags) << 6)) & (write_mul_underflow_to_vi ? 0x3C0 : ~0x100u);
+	const u32 old_sticky = VU->statusflag & 0x3C0;
 	const u32 helper_sticky = old_sticky | ((final_status_flags | mul_status_flags) << 6);
-	VU->statusflag = preserved_di | final_status_flags | helper_sticky | (((helper_sticky >> 6) & 0xF) << 16) | VU_FMAC_STICKY_SOURCE_VALID;
-	VU->VI[REG_STATUS_FLAG].UL = preserved_di | final_status_flags | vi_sticky;
+	VU->statusflag = preserved_di | final_status_flags | helper_sticky | (((final_status_flags | vi_mul_status_flags) & 0xF) << 16) | VU_FMAC_STICKY_SOURCE_VALID;
 }
 
 template <PS2Float(*Fn)(u32, u32, u32, bool), MACOpDst Dst>
@@ -1138,13 +1143,17 @@ static __fi void _vuOPMULA(VURegs* VU)
 		VU->ACC.i.x = VU_MACx_UPDATE(VU, x);
 		VU->ACC.i.y = VU_MACy_UPDATE(VU, y);
 		VU->ACC.i.z = VU_MACz_UPDATE(VU, z);
+		VU_MACw_CLEAR(VU);
+		VU_STAT_UPDATE(VU);
+		vuApplyMulStageSticky(VU,
+			vuGetMulStageStatusFlags(x) | vuGetMulStageStatusFlags(y) | vuGetMulStageStatusFlags(z), true);
+		return;
 	}
-	else
-	{
-		VU->ACC.i.x = VU_MACx_UPDATE(VU, vuDouble(VU->VF[_Fs_].i.y) * vuDouble(VU->VF[_Ft_].i.z));
-		VU->ACC.i.y = VU_MACy_UPDATE(VU, vuDouble(VU->VF[_Fs_].i.z) * vuDouble(VU->VF[_Ft_].i.x));
-		VU->ACC.i.z = VU_MACz_UPDATE(VU, vuDouble(VU->VF[_Fs_].i.x) * vuDouble(VU->VF[_Ft_].i.y));
-	}
+
+	VU->ACC.i.x = VU_MACx_UPDATE(VU, vuDouble(VU->VF[_Fs_].i.y) * vuDouble(VU->VF[_Ft_].i.z));
+	VU->ACC.i.y = VU_MACy_UPDATE(VU, vuDouble(VU->VF[_Fs_].i.z) * vuDouble(VU->VF[_Ft_].i.x));
+	VU->ACC.i.z = VU_MACz_UPDATE(VU, vuDouble(VU->VF[_Fs_].i.x) * vuDouble(VU->VF[_Ft_].i.y));
+	VU_MACw_CLEAR(VU);
 	VU_STAT_UPDATE(VU);
 }
 
@@ -1164,27 +1173,55 @@ static __fi void _vuOPMSUB(VURegs* VU)
 		u32 fsx = VU->VF[_Fs_].i.x;
 		u32 fsy = VU->VF[_Fs_].i.y;
 		u32 fsz = VU->VF[_Fs_].i.z;
+		u32 mul_status_flags = 0;
 
-		dst->i.x =
-			VU_MACx_UPDATE(VU, vuAccurateMulSub(VU->ACC.i.x, fsy, ftz, vuAccOverflowSet(VU, 0)));
-		dst->i.y =
-			VU_MACy_UPDATE(VU, vuAccurateMulSub(VU->ACC.i.y, fsz, ftx, vuAccOverflowSet(VU, 1)));
-		dst->i.z =
-			VU_MACz_UPDATE(VU, vuAccurateMulSub(VU->ACC.i.z, fsx, fty, vuAccOverflowSet(VU, 2)));
+		if (_X)
+		{
+			dst->i.x = VU_MACx_UPDATE(VU, vuAccurateMulSub(VU->ACC.i.x, fsy, ftz, vuAccOverflowSet(VU, 0)));
+			mul_status_flags |= vuGetMulStageStatusFlags(fsy, ftz);
+		}
+		else
+			VU_MACx_CLEAR(VU);
+		if (_Y)
+		{
+			dst->i.y = VU_MACy_UPDATE(VU, vuAccurateMulSub(VU->ACC.i.y, fsz, ftx, vuAccOverflowSet(VU, 1)));
+			mul_status_flags |= vuGetMulStageStatusFlags(fsz, ftx);
+		}
+		else
+			VU_MACy_CLEAR(VU);
+		if (_Z)
+		{
+			dst->i.z = VU_MACz_UPDATE(VU, vuAccurateMulSub(VU->ACC.i.z, fsx, fty, vuAccOverflowSet(VU, 2)));
+			mul_status_flags |= vuGetMulStageStatusFlags(fsx, fty);
+		}
+		else
+			VU_MACz_CLEAR(VU);
+		VU_MACw_CLEAR(VU);
+		VU_STAT_UPDATE(VU);
+		vuApplyMulStageSticky(VU, mul_status_flags, true);
+		return;
 	}
-	else
-	{
-		float ftx = vuDouble(VU->VF[_Ft_].i.x);
-		float fty = vuDouble(VU->VF[_Ft_].i.y);
-		float ftz = vuDouble(VU->VF[_Ft_].i.z);
-		float fsx = vuDouble(VU->VF[_Fs_].i.x);
-		float fsy = vuDouble(VU->VF[_Fs_].i.y);
-		float fsz = vuDouble(VU->VF[_Fs_].i.z);
 
+	float ftx = vuDouble(VU->VF[_Ft_].i.x);
+	float fty = vuDouble(VU->VF[_Ft_].i.y);
+	float ftz = vuDouble(VU->VF[_Ft_].i.z);
+	float fsx = vuDouble(VU->VF[_Fs_].i.x);
+	float fsy = vuDouble(VU->VF[_Fs_].i.y);
+	float fsz = vuDouble(VU->VF[_Fs_].i.z);
+
+	if (_X)
 		dst->i.x = VU_MACx_UPDATE(VU, vuDouble(VU->ACC.i.x) - fsy * ftz);
+	else
+		VU_MACx_CLEAR(VU);
+	if (_Y)
 		dst->i.y = VU_MACy_UPDATE(VU, vuDouble(VU->ACC.i.y) - fsz * ftx);
+	else
+		VU_MACy_CLEAR(VU);
+	if (_Z)
 		dst->i.z = VU_MACz_UPDATE(VU, vuDouble(VU->ACC.i.z) - fsx * fty);
-	}
+	else
+		VU_MACz_CLEAR(VU);
+	VU_MACw_CLEAR(VU);
 	VU_STAT_UPDATE(VU);
 }
 
@@ -2345,7 +2382,7 @@ static __ri void _vuXTOP(VURegs* VU)
 
 #define GET_VF0_FLAG(reg) (((reg) == 0) ? (1 << REG_VF0_FLAG) : 0)
 
-#define VUREGS_FDFSI(OP, ACC) \
+#define VUREGS_FDFSI(OP, ACC, FLAGS) \
 static __ri void _vuRegs##OP(const VURegs* VU, _VURegsNum *VUregsn) { \
 	VUregsn->pipe = VUPIPE_FMAC; \
 	VUregsn->VFwrite = _Fd_; \
@@ -2353,7 +2390,7 @@ static __ri void _vuRegs##OP(const VURegs* VU, _VURegsNum *VUregsn) { \
 	VUregsn->VFread0 = _Fs_; \
 	VUregsn->VFr0xyzw= _XYZW; \
 	VUregsn->VFread1 = 0; \
-	VUregsn->VIwrite = 0; \
+	VUregsn->VIwrite = (FLAGS) ? (1 << REG_MAC_FLAG) : 0; \
 	VUregsn->VIread  = (1 << REG_I)|((ACC)?(1<<REG_ACC_FLAG):0)|GET_VF0_FLAG(_Fs_); \
 }
 
@@ -2365,11 +2402,11 @@ static __ri void _vuRegs##OP(const VURegs* VU, _VURegsNum *VUregsn) { \
 	VUregsn->VFread0 = _Fs_; \
 	VUregsn->VFr0xyzw= _XYZW; \
 	VUregsn->VFread1 = 0; \
-	VUregsn->VIwrite = 0; \
+	VUregsn->VIwrite = 1 << REG_MAC_FLAG; \
 	VUregsn->VIread  = (1 << REG_Q)|((ACC)?(1<<REG_ACC_FLAG):0)|GET_VF0_FLAG(_Fs_); \
 }
 
-#define VUREGS_FDFSFT(OP, ACC) \
+#define VUREGS_FDFSFT(OP, ACC, FLAGS) \
 static __ri void _vuRegs##OP(const VURegs* VU, _VURegsNum *VUregsn) { \
 	VUregsn->pipe = VUPIPE_FMAC; \
 	VUregsn->VFwrite = _Fd_; \
@@ -2378,11 +2415,11 @@ static __ri void _vuRegs##OP(const VURegs* VU, _VURegsNum *VUregsn) { \
 	VUregsn->VFr0xyzw= _XYZW; \
 	VUregsn->VFread1 = _Ft_; \
 	VUregsn->VFr1xyzw= _XYZW; \
-	VUregsn->VIwrite = 0; \
+	VUregsn->VIwrite = (FLAGS) ? (1 << REG_MAC_FLAG) : 0; \
 	VUregsn->VIread  = ((ACC)?(1<<REG_ACC_FLAG):0)|GET_VF0_FLAG(_Fs_)|GET_VF0_FLAG(_Ft_); \
 }
 
-#define VUREGS_FDFSFTxyzw(OP, xyzw, ACC) \
+#define VUREGS_FDFSFTxyzw(OP, xyzw, ACC, FLAGS) \
 static __ri void _vuRegs##OP(const VURegs* VU, _VURegsNum *VUregsn) { \
 	VUregsn->pipe = VUPIPE_FMAC; \
 	VUregsn->VFwrite = _Fd_; \
@@ -2391,14 +2428,14 @@ static __ri void _vuRegs##OP(const VURegs* VU, _VURegsNum *VUregsn) { \
 	VUregsn->VFr0xyzw= _XYZW; \
 	VUregsn->VFread1 = _Ft_; \
 	VUregsn->VFr1xyzw= xyzw; \
-	VUregsn->VIwrite = 0; \
+	VUregsn->VIwrite = (FLAGS) ? (1 << REG_MAC_FLAG) : 0; \
 	VUregsn->VIread  = ((ACC)?(1<<REG_ACC_FLAG):0)|GET_VF0_FLAG(_Fs_)|GET_VF0_FLAG(_Ft_); \
 }
 
-#define VUREGS_FDFSFTx(OP, ACC) VUREGS_FDFSFTxyzw(OP, 8, ACC)
-#define VUREGS_FDFSFTy(OP, ACC) VUREGS_FDFSFTxyzw(OP, 4, ACC)
-#define VUREGS_FDFSFTz(OP, ACC) VUREGS_FDFSFTxyzw(OP, 2, ACC)
-#define VUREGS_FDFSFTw(OP, ACC) VUREGS_FDFSFTxyzw(OP, 1, ACC)
+#define VUREGS_FDFSFTx(OP, ACC, FLAGS) VUREGS_FDFSFTxyzw(OP, 8, ACC, FLAGS)
+#define VUREGS_FDFSFTy(OP, ACC, FLAGS) VUREGS_FDFSFTxyzw(OP, 4, ACC, FLAGS)
+#define VUREGS_FDFSFTz(OP, ACC, FLAGS) VUREGS_FDFSFTxyzw(OP, 2, ACC, FLAGS)
+#define VUREGS_FDFSFTw(OP, ACC, FLAGS) VUREGS_FDFSFTxyzw(OP, 1, ACC, FLAGS)
 
 
 #define VUREGS_ACCFSI(OP, readacc) \
@@ -2409,7 +2446,7 @@ static __ri void _vuRegs##OP(const VURegs* VU, _VURegsNum *VUregsn) { \
 	VUregsn->VFread0 = _Fs_; \
 	VUregsn->VFr0xyzw= _XYZW; \
 	VUregsn->VFread1 = 0; \
-	VUregsn->VIwrite = (1<<REG_ACC_FLAG); \
+	VUregsn->VIwrite = (1<<REG_ACC_FLAG) | (1 << REG_MAC_FLAG); \
 	VUregsn->VIread  = (1 << REG_I)|GET_VF0_FLAG(_Fs_)|(((readacc)||_XYZW!=15)?(1<<REG_ACC_FLAG):0); \
 }
 
@@ -2421,7 +2458,7 @@ static __ri void _vuRegs##OP(const VURegs* VU, _VURegsNum *VUregsn) { \
 	VUregsn->VFread0 = _Fs_; \
 	VUregsn->VFr0xyzw= _XYZW; \
 	VUregsn->VFread1 = 0; \
-	VUregsn->VIwrite = (1<<REG_ACC_FLAG); \
+	VUregsn->VIwrite = (1<<REG_ACC_FLAG) | (1 << REG_MAC_FLAG); \
 	VUregsn->VIread  = (1 << REG_Q)|GET_VF0_FLAG(_Fs_)|(((readacc)||_XYZW!=15)?(1<<REG_ACC_FLAG):0); \
 }
 
@@ -2434,7 +2471,7 @@ static __ri void _vuRegs##OP(const VURegs* VU, _VURegsNum *VUregsn) { \
 	VUregsn->VFr0xyzw= _XYZW; \
 	VUregsn->VFread1 = _Ft_; \
 	VUregsn->VFr1xyzw= _XYZW; \
-	VUregsn->VIwrite = (1<<REG_ACC_FLAG); \
+	VUregsn->VIwrite = (1<<REG_ACC_FLAG) | (1 << REG_MAC_FLAG); \
 	VUregsn->VIread  = GET_VF0_FLAG(_Fs_)|GET_VF0_FLAG(_Ft_)|(((readacc)||_XYZW!=15)?(1<<REG_ACC_FLAG):0); \
 }
 
@@ -2447,7 +2484,7 @@ static __ri void _vuRegs##OP(const VURegs* VU, _VURegsNum *VUregsn) { \
 	VUregsn->VFr0xyzw= _XYZW; \
 	VUregsn->VFread1 = _Ft_; \
 	VUregsn->VFr1xyzw= xyzw; \
-	VUregsn->VIwrite = (1<<REG_ACC_FLAG); \
+	VUregsn->VIwrite = (1<<REG_ACC_FLAG) | (1 << REG_MAC_FLAG); \
 	VUregsn->VIread  = GET_VF0_FLAG(_Fs_)|GET_VF0_FLAG(_Ft_)|(((readacc)||_XYZW!=15)?(1<<REG_ACC_FLAG):0); \
 }
 
@@ -2517,13 +2554,13 @@ static __ri void _vuRegs##OP(const VURegs* VU, _VURegsNum *VUregsn) { \
 
 VUREGS_FTFS(ABS);
 
-VUREGS_FDFSFT(ADD, 0);
-VUREGS_FDFSI(ADDi, 0);
+VUREGS_FDFSFT(ADD, 0, true);
+VUREGS_FDFSI(ADDi, 0, true);
 VUREGS_FDFSQ(ADDq, 0);
-VUREGS_FDFSFTx(ADDx, 0);
-VUREGS_FDFSFTy(ADDy, 0);
-VUREGS_FDFSFTz(ADDz, 0);
-VUREGS_FDFSFTw(ADDw, 0);
+VUREGS_FDFSFTx(ADDx, 0, true);
+VUREGS_FDFSFTy(ADDy, 0, true);
+VUREGS_FDFSFTz(ADDz, 0, true);
+VUREGS_FDFSFTw(ADDw, 0, true);
 
 VUREGS_ACCFSFT(ADDA, 0);
 VUREGS_ACCFSI(ADDAi, 0);
@@ -2533,13 +2570,13 @@ VUREGS_ACCFSFTy(ADDAy, 0);
 VUREGS_ACCFSFTz(ADDAz, 0);
 VUREGS_ACCFSFTw(ADDAw, 0);
 
-VUREGS_FDFSFT(SUB, 0);
-VUREGS_FDFSI(SUBi, 0);
+VUREGS_FDFSFT(SUB, 0, true);
+VUREGS_FDFSI(SUBi, 0, true);
 VUREGS_FDFSQ(SUBq, 0);
-VUREGS_FDFSFTx(SUBx, 0);
-VUREGS_FDFSFTy(SUBy, 0);
-VUREGS_FDFSFTz(SUBz, 0);
-VUREGS_FDFSFTw(SUBw, 0);
+VUREGS_FDFSFTx(SUBx, 0, true);
+VUREGS_FDFSFTy(SUBy, 0, true);
+VUREGS_FDFSFTz(SUBz, 0, true);
+VUREGS_FDFSFTw(SUBw, 0, true);
 
 VUREGS_ACCFSFT(SUBA, 0);
 VUREGS_ACCFSI(SUBAi, 0);
@@ -2558,12 +2595,12 @@ static __ri void _vuRegs##OP(const VURegs* VU, _VURegsNum *VUregsn) { \
 		VUregsn->VFr0xyzw= _XYZW; \
 		VUregsn->VFread1 = _Ft_; \
 		VUregsn->VFr1xyzw= xyzw; \
-		VUregsn->VIwrite = ((ACC)?(1<<REG_ACC_FLAG):0); \
+		VUregsn->VIwrite = ((ACC)?(1<<REG_ACC_FLAG):0) | (1 << REG_MAC_FLAG); \
 		VUregsn->VIread  = GET_VF0_FLAG(_Fs_)|(((ACC)&&(_XYZW!=15))?(1<<REG_ACC_FLAG):0); \
 }
 
-VUREGS_FDFSFT(MUL, 0);
-VUREGS_FDFSI(MULi, 0);
+VUREGS_FDFSFT(MUL, 0, true);
+VUREGS_FDFSI(MULi, 0, true);
 VUREGS_FDFSQ(MULq, 0);
 VUREGS_FDFSFTxyzw_MUL(MULx, 0, 8);
 VUREGS_FDFSFTxyzw_MUL(MULy, 0, 4);
@@ -2578,8 +2615,8 @@ VUREGS_FDFSFTxyzw_MUL(MULAy, 1, 4);
 VUREGS_FDFSFTxyzw_MUL(MULAz, 1, 2);
 VUREGS_FDFSFTxyzw_MUL(MULAw, 1, 1);
 
-VUREGS_FDFSFT(MADD, 1);
-VUREGS_FDFSI(MADDi, 1);
+VUREGS_FDFSFT(MADD, 1, true);
+VUREGS_FDFSI(MADDi, 1, true);
 VUREGS_FDFSQ(MADDq, 1);
 
 #define VUREGS_FDFSFT_0_xyzw(OP, xyzw) \
@@ -2591,7 +2628,7 @@ static __ri void _vuRegs##OP(const VURegs* VU, _VURegsNum *VUregsn) { \
 	VUregsn->VFr0xyzw= _XYZW; \
 	VUregsn->VFread1 = _Ft_; \
 	VUregsn->VFr1xyzw= xyzw; \
-	VUregsn->VIwrite = 0; \
+	VUregsn->VIwrite = 1 << REG_MAC_FLAG; \
 	VUregsn->VIread  = (1<<REG_ACC_FLAG)|(_Ft_ ? GET_VF0_FLAG(_Fs_) : 0); \
 }
 
@@ -2608,7 +2645,7 @@ static __ri void _vuRegsMADDw(const VURegs* VU, _VURegsNum* VUregsn)
 	VUregsn->VFr0xyzw= _XYZW;
 	VUregsn->VFread1 = _Ft_;
 	VUregsn->VFr1xyzw= 1;
-	VUregsn->VIwrite = 0;
+	VUregsn->VIwrite = 1 << REG_MAC_FLAG;
 	VUregsn->VIread  = (1<<REG_ACC_FLAG)|GET_VF0_FLAG(_Fs_);
 }
 
@@ -2620,13 +2657,13 @@ VUREGS_ACCFSFTy(MADDAy, 1);
 VUREGS_ACCFSFTz(MADDAz, 1);
 VUREGS_ACCFSFTw(MADDAw, 1);
 
-VUREGS_FDFSFT(MSUB, 1);
-VUREGS_FDFSI(MSUBi, 1);
+VUREGS_FDFSFT(MSUB, 1, true);
+VUREGS_FDFSI(MSUBi, 1, true);
 VUREGS_FDFSQ(MSUBq, 1);
-VUREGS_FDFSFTx(MSUBx, 1);
-VUREGS_FDFSFTy(MSUBy, 1);
-VUREGS_FDFSFTz(MSUBz, 1);
-VUREGS_FDFSFTw(MSUBw, 1);
+VUREGS_FDFSFTx(MSUBx, 1, true);
+VUREGS_FDFSFTy(MSUBy, 1, true);
+VUREGS_FDFSFTz(MSUBz, 1, true);
+VUREGS_FDFSFTw(MSUBw, 1, true);
 
 VUREGS_ACCFSFT(MSUBA, 1);
 VUREGS_ACCFSI(MSUBAi, 1);
@@ -2636,12 +2673,12 @@ VUREGS_ACCFSFTy(MSUBAy, 1);
 VUREGS_ACCFSFTz(MSUBAz, 1);
 VUREGS_ACCFSFTw(MSUBAw, 1);
 
-VUREGS_FDFSFT(MAX, 0);
-VUREGS_FDFSI(MAXi, 0);
-VUREGS_FDFSFTx(MAXx_, 0);
-VUREGS_FDFSFTy(MAXy_, 0);
-VUREGS_FDFSFTz(MAXz_, 0);
-VUREGS_FDFSFTw(MAXw_, 0);
+VUREGS_FDFSFT(MAX, 0, false);
+VUREGS_FDFSI(MAXi, 0, false);
+VUREGS_FDFSFTx(MAXx_, 0, false);
+VUREGS_FDFSFTy(MAXy_, 0, false);
+VUREGS_FDFSFTz(MAXz_, 0, false);
+VUREGS_FDFSFTw(MAXw_, 0, false);
 
 static __ri void _vuRegsMAXx(const VURegs* VU, _VURegsNum* VUregsn)
 {
@@ -2660,12 +2697,12 @@ static __ri void _vuRegsMAXw(const VURegs* VU, _VURegsNum* VUregsn)
 	_vuRegsMAXw_(VU, VUregsn);
 }
 
-VUREGS_FDFSFT(MINI, 0);
-VUREGS_FDFSI(MINIi, 0);
-VUREGS_FDFSFTx(MINIx, 0);
-VUREGS_FDFSFTy(MINIy, 0);
-VUREGS_FDFSFTz(MINIz, 0);
-VUREGS_FDFSFTw(MINIw, 0);
+VUREGS_FDFSFT(MINI, 0, false);
+VUREGS_FDFSI(MINIi, 0, false);
+VUREGS_FDFSFTx(MINIx, 0, false);
+VUREGS_FDFSFTy(MINIy, 0, false);
+VUREGS_FDFSFTz(MINIz, 0, false);
+VUREGS_FDFSFTw(MINIw, 0, false);
 
 static __ri void _vuRegsOPMULA(const VURegs* VU, _VURegsNum* VUregsn)
 {
@@ -2676,7 +2713,7 @@ static __ri void _vuRegsOPMULA(const VURegs* VU, _VURegsNum* VUregsn)
 	VUregsn->VFr0xyzw= 0xE;
 	VUregsn->VFread1 = _Ft_;
 	VUregsn->VFr1xyzw= 0xE;
-	VUregsn->VIwrite = 1<<REG_ACC_FLAG;
+	VUregsn->VIwrite = (1<<REG_ACC_FLAG) | (1 << REG_MAC_FLAG);
 	VUregsn->VIread  = GET_VF0_FLAG(_Fs_)|GET_VF0_FLAG(_Ft_)|(1<<REG_ACC_FLAG);
 }
 
@@ -2689,7 +2726,7 @@ static __ri void _vuRegsOPMSUB(const VURegs* VU, _VURegsNum* VUregsn)
 	VUregsn->VFr0xyzw= 0xE;
 	VUregsn->VFread1 = _Ft_;
 	VUregsn->VFr1xyzw= 0xE;
-	VUregsn->VIwrite = 0;
+	VUregsn->VIwrite = 1 << REG_MAC_FLAG;
 	VUregsn->VIread  = GET_VF0_FLAG(_Fs_)|GET_VF0_FLAG(_Ft_)|(1<<REG_ACC_FLAG);
 }
 
@@ -4293,7 +4330,10 @@ _vuRegsTables(VU1, VU1regs, FnPtr_VuRegsN)
 
 static __fi void SYNCMSFLAGS()
 {
-	VU0.VI[REG_STATUS_FLAG].UL = (VU0.VI[REG_STATUS_FLAG].UL & 0xFF0) | (VU0.statusflag & 0xF) | ((VU0.statusflag & 0xF) << 6);
+	const u32 current = VU0.statusflag & 0xF;
+
+	VU0.VI[REG_STATUS_FLAG].UL = (VU0.VI[REG_STATUS_FLAG].UL & 0xFF0) |
+		(VU0.statusflag & 0xFC0) | current | (current << 6);
 	VU0.VI[REG_MAC_FLAG].UL = VU0.macflag;
 }
 

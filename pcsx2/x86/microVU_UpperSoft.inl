@@ -213,42 +213,6 @@ static void mVUemitSoftVisibleStatusWriteback(microVU& mVU, int result_offset,
 		xAND(gprT1, 0x3c0);
 		xMOV(gprT2, resultPtr(offsetof(VuSoftFmacJitResult, status_flags)));
 		xMOV(edx, resultPtr(offsetof(VuSoftFmacJitResult, sticky_status_flags)));
-		if (mVU.cop2 && !op.WritesAcc())
-		{
-			std::optional<xForwardJump8> acc_x_nonzero;
-			std::optional<xForwardJump8> acc_y_nonzero;
-			std::optional<xForwardJump8> acc_z_nonzero;
-			std::optional<xForwardJump8> acc_w_nonzero;
-			if (_X)
-			{
-				xTEST(ptr32[&mVU.regs().ACC.UL[0]], 0x7fffffff);
-				acc_x_nonzero.emplace(Jcc_NotZero);
-			}
-			if (_Y)
-			{
-				xTEST(ptr32[&mVU.regs().ACC.UL[1]], 0x7fffffff);
-				acc_y_nonzero.emplace(Jcc_NotZero);
-			}
-			if (_Z)
-			{
-				xTEST(ptr32[&mVU.regs().ACC.UL[2]], 0x7fffffff);
-				acc_z_nonzero.emplace(Jcc_NotZero);
-			}
-			if (_W)
-			{
-				xTEST(ptr32[&mVU.regs().ACC.UL[3]], 0x7fffffff);
-				acc_w_nonzero.emplace(Jcc_NotZero);
-			}
-			xAND(edx, ~0x4u);
-			if (acc_x_nonzero.has_value())
-				acc_x_nonzero->SetTarget();
-			if (acc_y_nonzero.has_value())
-				acc_y_nonzero->SetTarget();
-			if (acc_z_nonzero.has_value())
-				acc_z_nonzero->SetTarget();
-			if (acc_w_nonzero.has_value())
-				acc_w_nonzero->SetTarget();
-		}
 		xSHL(edx, 6);
 		xOR(gprT1, edx);
 		xOR(gprT1, gprT2);
@@ -3194,17 +3158,12 @@ static void mVUemitUpperInlineMaddExactResult(microVU& mVU, VuUpperFmacSoftDescr
 	const bool switch_native_mxcsr = switch_mxcsr && native_ps2_zero;
 	const bool native_path_available = allow_fast_normal && use_vector_native_prepare &&
 	                                   (!switch_mxcsr || switch_native_mxcsr) && !_XYZW_SS && _X_Y_Z_W != 0;
-	// Q is double-buffered in xmmPQ. Keep VU0 Q-fed MADD/MSUB on the register
-	// path so a stackless success cannot bypass the normal cached-state tail.
-	const bool emit_stackless_prefix = native_path_available && !needs_result_flags &&
-	                                   !(mVU.index == 0 && variant == 2);
+
+	const bool emit_stackless_prefix = native_path_available && !needs_result_flags;
 	const bool emit_identity_compact = native_path_available && _X_Y_Z_W == 0xf &&
 	                                   !emit_stackless_prefix && use_identity_stackless_madd;
-	// VU0 COP2 shares flag state with the EE macro pipeline. Keep its uncommon
-	// flag-producing misses on the generated exact vector kernel; the stackless,
-	// identity, and hot VU micro register paths remain enabled.
-	const bool emit_register_fallback = native_path_available && !emit_identity_compact &&
-	                                    !(mVU.index == 0 && mVU.cop2);
+
+	const bool emit_register_fallback = native_path_available && !emit_identity_compact;
 	std::optional<xForwardJump32> native_active_flags_ready;
 	std::optional<xForwardJump32> outlined_result_ready;
 	std::optional<xForwardJump32> compact_common_finished;

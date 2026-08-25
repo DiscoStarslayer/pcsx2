@@ -1789,7 +1789,7 @@ mVUop(mVU_FSSET)
 		xAND(getFlagReg(sFLAG.write), 0xfff00); // Keep Non-Sticky Bits
 		if (imm)
 			xOR(getFlagReg(sFLAG.write), imm);
-		if (mVU.index == 1 && CHECK_VU_SOFT(1))
+		if (CHECK_VU_SOFT(mVU.index))
 		{
 			xMOV(gprT1, ptr32[&mVU.regs().statusflag]);
 			xAND(gprT1, ~0xfc0u);
