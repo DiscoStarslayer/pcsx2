@@ -2973,6 +2973,15 @@ void MainWindow::displayResizeRequested(qint32 width, qint32 height)
 
 	// we are rendering to the main window. we have to add in the extra height from the toolbar/status bar.
 	const s32 extra_height = this->height() - m_display_container->height();
+
+	const s32 minimum_width = std::max(minimumSizeHint().width(), minimumWidth());
+	if (width > 0 && minimum_width > width)
+	{
+		height = static_cast<qint32>(std::lroundf(
+			static_cast<float>(height) * static_cast<float>(minimum_width) / static_cast<float>(width)));
+		width = minimum_width;
+	}
+
 	QtUtils::ResizePotentiallyFixedSizeWindow(this, width, height + extra_height);
 }
 
