@@ -149,8 +149,6 @@ static void mVUemitSoftMFlagWriteback(microVU& mVU, int result_offset, bool pres
 			xMOV(resultPtr(offsetof(VuSoftFmacJitResult, mac_flags)), gprT1);
 		}
 		mVUallocMFLAGb(mVU, gprT1, mFLAG.write);
-		if (mVU.cop2)
-			xMOV(ptr32[&mVU.regs().macflag], gprT1);
 	}
 }
 

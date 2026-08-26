@@ -92,8 +92,16 @@ __fi void mVUallocMFLAGa(mV, const x32& reg, int fInstance)
 __fi void mVUallocMFLAGb(mV, const x32& reg, int fInstance)
 {
 	//xAND(reg, 0xffff);
-	if (fInstance < 4) xMOV(ptr32[&mVU.macFlag[fInstance]], reg);         // microVU
-	else               xMOV(ptr32[&mVU.regs().VI[REG_MAC_FLAG].UL], reg); // macroVU
+	if (fInstance < 4)
+	{
+		xMOV(ptr32[&mVU.macFlag[fInstance]], reg); // microVU
+	}
+	else
+	{
+		xMOV(ptr32[&mVU.regs().VI[REG_MAC_FLAG].UL], reg); // macroVU
+		if (mVU.cop2)
+			xMOV(ptr32[&mVU.regs().macflag], reg);
+	}
 }
 
 __fi void mVUallocCFLAGa(mV, const x32& reg, int fInstance)
