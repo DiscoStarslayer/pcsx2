@@ -439,9 +439,8 @@ bool GSreopen(bool recreate_device, bool recreate_renderer, GSRendererType new_r
 	{
 		// We need a new render window when changing APIs.
 		const bool recreate_window = !g_gs_device || (g_gs_device->GetRenderAPI() != GetAPIForRenderer(GSConfig.Renderer));
-		// TODO: Pass these through.
-		const GSVSyncMode vsync_mode = g_gs_device ? g_gs_device->GetVSyncMode() : GSVSyncMode::FIFO;
-		const bool allow_present_throttle = !g_gs_device || g_gs_device->IsPresentThrottleAllowed();
+		const GSVSyncMode vsync_mode = VMManager::GetEffectiveVSyncMode();
+		const bool allow_present_throttle = VMManager::ShouldAllowPresentThrottle();
 		CloseGSDevice(false);
 
 		if (!OpenGSDevice(new_renderer, false, recreate_window, vsync_mode, allow_present_throttle))
