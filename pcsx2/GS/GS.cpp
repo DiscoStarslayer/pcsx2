@@ -182,6 +182,7 @@ static bool OpenGSDevice(GSRendererType renderer, bool clear_state_on_fail, bool
 				g_pgs_device.reset();
 				return false;
 			}
+			g_pgs_device->SetVSyncMode(vsync_mode, allow_present_throttle);
 
 			// The renderer owns its own device for now.
 			okay = ImGuiManager::Initialize();

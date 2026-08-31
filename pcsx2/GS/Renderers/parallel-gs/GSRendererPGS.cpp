@@ -662,8 +662,6 @@ void GSRendererPGS::VSync(u32 field, bool registers_written, bool refresh_frame)
 
 		if (frame_is_duped && !GSConfig.SkipDuplicateFrames)
 			wsi.set_next_present_is_duplicated();
-
-		PerformanceMetrics::Update(registers_written, last_frame_stats.num_render_passes != 0, false);
 	}
 
 	Host::BeginPresentFrame();
@@ -674,6 +672,9 @@ void GSRendererPGS::VSync(u32 field, bool registers_written, bool refresh_frame)
 		ImGuiManager::SkipFrame();
 		return;
 	}
+
+	if (!refresh_frame)
+		PerformanceMetrics::Update(registers_written, last_frame_stats.num_render_passes != 0, false);
 
 	if (vsync.image)
 	{
