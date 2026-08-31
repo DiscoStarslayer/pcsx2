@@ -249,7 +249,8 @@ static void mVUemitSoftVisibleStatusWriteback(microVU& mVU, int result_offset,
 	// OPMULA preserves inactive W and participates in microVU's delayed status
 	// pipeline. Its preceding sticky value must come from that ring, not the
 	// potentially older architectural VI status shadow.
-	if (op.UsesRingStatusSource(mVU.index) || (!mVU.cop2 && preserve_opm_inactive_w))
+	const bool stalled_fd_add_sub_mul = !mVU.cop2 && mVUstall && op.IsAddSubMul() && !op.WritesAcc();
+	if (op.UsesRingStatusSource(mVU.index) || stalled_fd_add_sub_mul || (!mVU.cop2 && preserve_opm_inactive_w))
 		mVUallocSFLAGc(gprT1, gprT2, sFLAG.lastWrite);
 	else
 		xMOV(gprT1, ptr32[&mVU.regs().VI[REG_STATUS_FLAG].UL]);
@@ -260,8 +261,9 @@ static void mVUemitSoftVisibleStatusWriteback(microVU& mVU, int result_offset,
 	xAND(gprT1, prior_status_mask);
 	if (!mVU.cop2 && op.IsImmediateFdAddSubMul())
 	{
-		xAND(gprT1, 0xcc0);
-		xOR(gprT1, 0xc0);
+		xMOV(edx, ptr32[&mVU.regs().VI[REG_STATUS_FLAG].UL]);
+		xAND(edx, 0xfc0);
+		xOR(gprT1, edx);
 	}
 	const bool broadcast_fd = !mVU.cop2 && op.IsBroadcastFdAddSubMul();
 	if (broadcast_fd)

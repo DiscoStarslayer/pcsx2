@@ -81,13 +81,15 @@ struct alignas(4) VuUpperFmacSoftDescriptor
 
 	constexpr bool PromotesNonSticky() const
 	{
-		return (IsAddSub() && ReadsQ()) ||
-		       (IsAddSubMul() && source == VuUpperFmacSoftOperandSource::Ft);
+		return IsAddSubMul() &&
+		       (ReadsQ() || source == VuUpperFmacSoftOperandSource::Ft || IsImmediateFdAddSubMul());
 	}
 
 	constexpr bool UsesRingStatusSource(u32 vu_index) const
 	{
+		// This shit is becoming a mess, needs a rethink
 		return (IsAddSub() && ReadsQ()) ||
+		       IsImmediateFdAddSubMul() ||
 		       (IsAddSubMul() && source == VuUpperFmacSoftOperandSource::Ft &&
 				   ((vu_index == 0 && destination == VuUpperFmacSoftDestination::Fd) ||
 					   (vu_index == 1 && destination == VuUpperFmacSoftDestination::Acc)));

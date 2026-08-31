@@ -122,11 +122,6 @@ static void _vu1Exec(VURegs* VU)
 		}
 		if (uregs.VIwrite & (1 << REG_CLIP_FLAG))
 		{
-			if (lregs.VIwrite & (1 << REG_CLIP_FLAG))
-			{
-				//Console.Warning("*PCSX2*: Warning, VI write to the same reg in both lower/upper cyclepc=%x", VU->VI[REG_TPC].UL);
-				discard = 1;
-			}
 			if (lregs.VIread & (1 << REG_CLIP_FLAG))
 			{
 				//Console.Warning("*PCSX2*: Warning, VI read same cycle as write pc=%x", VU->VI[REG_TPC].UL);

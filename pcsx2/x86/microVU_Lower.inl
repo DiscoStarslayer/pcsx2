@@ -83,7 +83,10 @@ static void mVUemitLowerSoftQAndStatusWriteback(microVU& mVU)
 	if (sFLAG.doFlag)
 	{
 		mVUallocSFLAGd(&mVU.regs().VI[REG_STATUS_FLAG].UL, gprT1, gprT2);
-		mVUallocSFLAGb(gprT1, sFLAG.write);
+		constexpr u32 div_status_mask = divI | divD;
+		xAND(gprT1, div_status_mask);
+		xAND(getFlagReg(sFLAG.write), ~div_status_mask);
+		xOR(getFlagReg(sFLAG.write), gprT1);
 	}
 }
 
