@@ -107,6 +107,12 @@ AudioSettingsWidget::AudioSettingsWidget(SettingsWindow* settings_dialog, QWidge
 	dialog()->registerWidgetHelp(
 		m_ui.outputLatencyMS, tr("Output Latency"), tr("%1 ms").arg(AudioStreamParameters::DEFAULT_OUTPUT_LATENCY_MS),
 		tr("Requests the host output latency. The marker shows the minimum reported by the selected backend and device."));
+	dialog()->registerWidgetHelp(
+		m_ui.driver, tr("Driver"), tr("Default"),
+		tr("Selects the host audio driver used by the audio backend."));
+	dialog()->registerWidgetHelp(
+		m_ui.outputDevice, tr("Output Device"), tr("Default"),
+		tr("Selects the physical audio output device on the host machine."));
 	dialog()->registerWidgetHelp(m_ui.standardVolume, tr("Standard Volume"), "100%",
 		tr("Controls the volume of the audio played on the host at normal speed."));
 	dialog()->registerWidgetHelp(m_ui.fastForwardVolume, tr("Fast Forward Volume"), "100%",
