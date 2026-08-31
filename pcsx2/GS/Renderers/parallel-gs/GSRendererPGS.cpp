@@ -260,6 +260,8 @@ bool GSRendererPGS::Init()
 	opts.super_sampled_textures = GSConfig.PGSSuperSampleTextures != 0;
 	if (!iface.init(&wsi.get_device(), opts))
 		return false;
+	if (!SetGPUTimingEnabled(true))
+		GSConfig.OsdShowGPU = false;
 
 	current_super_sampling = opts.super_sampling;
 	current_ordered_super_sampling = opts.ordered_super_sampling;
@@ -278,6 +280,52 @@ bool GSRendererPGS::Init()
 		return false;
 
 	return true;
+}
+
+bool GSRendererPGS::SetGPUTimingEnabled(bool enabled)
+{
+	const auto &dev = device.get_device();
+	const auto &props = dev.get_gpu_properties();
+	const bool supported = props.limits.timestampComputeAndGraphics != 0 &&
+	                       dev.get_queue_info().timestamp_valid_bits > 0 && props.limits.timestampPeriod > 0.0f;
+	if (enabled && !supported)
+		return false;
+
+	DebugMode debug_mode = {};
+	debug_mode.timestamps = enabled;
+	iface.set_debug_mode(debug_mode);
+	gpu_timing_enabled = enabled;
+
+	last_gpu_timestamp = 0.0;
+	for (int i = 0; i < static_cast<int>(TimestampType::Count); i++)
+		last_gpu_timestamp += iface.get_accumulated_timestamps(static_cast<TimestampType>(i));
+
+	return true;
+}
+
+float GSRendererPGS::GetAndResetAccumulatedGPUTime()
+{
+	if (!gpu_timing_enabled)
+		return 0.0f;
+
+	double gpu_timestamp = 0.0;
+	for (int i = 0; i < static_cast<int>(TimestampType::Count); i++)
+		gpu_timestamp += iface.get_accumulated_timestamps(static_cast<TimestampType>(i));
+
+	double gpu_time = std::max(gpu_timestamp - last_gpu_timestamp, 0.0);
+	last_gpu_timestamp = gpu_timestamp;
+
+	auto timestamp_it = gpu_timestamps.begin();
+	for (; timestamp_it != gpu_timestamps.end() && timestamp_it->start->is_signalled() &&
+	       timestamp_it->end->is_signalled();
+	     timestamp_it++)
+	{
+		gpu_time += device.get_device().convert_device_timestamp_delta(timestamp_it->start->get_timestamp_ticks(),
+		                                                               timestamp_it->end->get_timestamp_ticks());
+	}
+	gpu_timestamps.erase(gpu_timestamps.begin(), timestamp_it);
+
+	return static_cast<float>(gpu_time * 1000.0);
 }
 
 void GSRendererPGS::Reset(bool /*hardware_reset*/)
@@ -674,7 +722,10 @@ void GSRendererPGS::VSync(u32 field, bool registers_written, bool refresh_frame)
 	}
 
 	if (!refresh_frame)
+	{
+		PerformanceMetrics::OnGPUPresent(GetAndResetAccumulatedGPUTime(), 0, 0);
 		PerformanceMetrics::Update(registers_written, last_frame_stats.num_render_passes != 0, false);
+	}
 
 	if (vsync.image)
 	{
@@ -919,6 +970,9 @@ void GSRendererPGS::VSync(u32 field, bool registers_written, bool refresh_frame)
 		}
 
 		auto cmd = dev.request_command_buffer();
+		QueryPoolHandle gpu_start_timestamp;
+		if (gpu_timing_enabled)
+			gpu_start_timestamp = cmd->write_timestamp(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
 		render_ui_prepare(*cmd);
 
@@ -1125,6 +1179,11 @@ void GSRendererPGS::VSync(u32 field, bool registers_written, bool refresh_frame)
 		render_ui_flush(*cmd);
 		cmd->end_render_pass();
 
+		if (gpu_timing_enabled)
+		{
+			auto gpu_end_timestamp = cmd->write_timestamp(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+			gpu_timestamps.push_back({ std::move(gpu_start_timestamp), std::move(gpu_end_timestamp) });
+		}
 		dev.submit(cmd);
 		if (screenshot_readback || screenshot_failed)
 		{

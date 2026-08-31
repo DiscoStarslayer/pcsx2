@@ -235,8 +235,6 @@ static bool OpenGSDevice(GSRendererType renderer, bool clear_state_on_fail, bool
 	}
 	else
 	{
-		// Needs proper testing before these OSD counters can be exposed through parallel-GS.
-		GSConfig.OsdShowGPU = false;
 		GSConfig.OsdShowGPUStats = false;
 	}
 

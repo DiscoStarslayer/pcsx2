@@ -139,6 +139,13 @@ private:
 	void render_blit(Vulkan::CommandBuffer& cmd, const Vulkan::ImageView& view,
 		float offset_x, float offset_y,
 		float width, float height);
+	bool SetGPUTimingEnabled(bool enabled);
+	float GetAndResetAccumulatedGPUTime();
+	struct GPUTimestamp
+	{
+		Vulkan::QueryPoolHandle start;
+		Vulkan::QueryPoolHandle end;
+	};
 	Vulkan::ImageHandle fsr_render_target;
 	ParallelGS::ScanoutResult vsync;
 
@@ -148,6 +155,9 @@ private:
 	bool current_super_sample_textures = false;
 	uint32_t last_internal_width = 0;
 	uint32_t last_internal_height = 0;
+	double last_gpu_timestamp = 0.0;
+	bool gpu_timing_enabled = false;
+	std::vector<GPUTimestamp> gpu_timestamps;
 
 	static int GetSaveStateSize(int version);
 
