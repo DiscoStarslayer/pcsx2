@@ -731,8 +731,6 @@ void GSRendererPGS::VSync(u32 field, bool registers_written, bool refresh_frame)
 	{
 		// Are these values 100% accurate?
 		float fps = priv->smode1.LC == SMODE1Bits::LC_ANALOG && priv->smode1.CMOD == SMODE1Bits::CMOD_PAL ? 50.0f : 59.94f;
-		// exception for Arcade VGA
-		if (priv->smode1.LC == SMODE1Bits::LC_VESA_640x480) fps = 59.94f;
 		uint64_t target_period_ns = 1000000000ull / fps;
 		bool force_vrr = false;
 
