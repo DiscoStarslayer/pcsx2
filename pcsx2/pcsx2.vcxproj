@@ -308,6 +308,7 @@
     <ClCompile Include="GS\parallel-gs\Granite\vulkan\semaphore_manager.cpp" />
     <ClCompile Include="GS\parallel-gs\Granite\vulkan\shader.cpp" />
     <ClCompile Include="GS\parallel-gs\Granite\vulkan\wsi.cpp" />
+    <ClCompile Include="GS\parallel-gs\Granite\vulkan\wsi_pacer.cpp" />
     <ClCompile Include="GS\parallel-gs\Granite\vulkan\pipeline_cache.cpp" />
     <ClCompile Include="GS\parallel-gs\Granite\vulkan\texture\memory_mapped_texture.cpp" />
     <ClCompile Include="GS\parallel-gs\Granite\vulkan\texture\texture_files.cpp" />
