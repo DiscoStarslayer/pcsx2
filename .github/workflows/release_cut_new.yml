@@ -123,7 +123,7 @@ jobs:
 
   # Windows
   build_windows_deps:
-    if: github.repository == 'PCSX2/pcsx2'
+    if: github.repository == 'DiscoStarslayer/pcsx2-reliquary'
     name: "Windows Dependencies"
     uses: ./.github/workflows/windows_deps_build.yml
 
