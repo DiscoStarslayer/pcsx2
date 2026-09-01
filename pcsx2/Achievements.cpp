@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0+
 
 #include "Achievements.h"
-#include "BuildVersion.h"
 #include "CDVD/CDVD.h"
 #include "Elfheader.h"
 #include "Host.h"
@@ -23,6 +22,7 @@
 #include "common/FileSystem.h"
 #include "common/HTTPDownloader.h"
 #include "common/HeapArray.h"
+#include "common/HostSys.h"
 #include "common/MD5Digest.h"
 #include "common/Path.h"
 #include "common/ScopedGuard.h"
@@ -77,6 +77,15 @@ namespace Achievements
 
 	// Chrome uses 10 server calls per domain, seems reasonable.
 	static constexpr u32 MAX_CONCURRENT_SERVER_CALLS = 10;
+
+	static constexpr const char* RETROACHIEVEMENTS_CLIENT_NAME = "PCSX2";
+	static constexpr const char* RETROACHIEVEMENTS_CLIENT_VERSION = "v2.9.7";
+
+	static std::string GetUserAgent()
+	{
+		return fmt::format("{} {} ({})", RETROACHIEVEMENTS_CLIENT_NAME, RETROACHIEVEMENTS_CLIENT_VERSION,
+			GetOSVersionString());
+	}
 
 	namespace
 	{
@@ -498,7 +507,7 @@ u32 Achievements::GetExposedEEMemorySize()
 
 bool Achievements::CreateClient(rc_client_t** client, std::unique_ptr<HTTPDownloader>* http)
 {
-	*http = HTTPDownloader::Create(Host::GetHTTPUserAgent());
+	*http = HTTPDownloader::Create(GetUserAgent());
 	if (!*http)
 	{
 		Host::ReportErrorAsync("Achievements Error", "Failed to create HTTPDownloader, cannot use achievements");
@@ -3801,8 +3810,8 @@ void Achievements::SwitchToRAIntegration()
 
 void Achievements::RAIntegration::InitializeRAIntegration(void* main_window_handle)
 {
-	RA_InitClient((HWND)main_window_handle, "PCSX2", BuildVersion::GitTag);
-	RA_SetUserAgentDetail(Host::GetHTTPUserAgent().c_str());
+	RA_InitClient((HWND)main_window_handle, RETROACHIEVEMENTS_CLIENT_NAME, RETROACHIEVEMENTS_CLIENT_VERSION);
+	RA_SetUserAgentDetail(GetUserAgent().c_str());
 
 	RA_InstallSharedFunctions(RACallbackIsActive, RACallbackCauseUnpause, RACallbackCausePause, RACallbackRebuildMenu,
 		RACallbackEstimateTitle, RACallbackResetEmulator, RACallbackLoadROM);
