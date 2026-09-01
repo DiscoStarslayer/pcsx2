@@ -24,6 +24,7 @@ PCSX2 Reliquary is an experimental fork of [PCSX2](https://github.com/PCSX2/pcsx
 | Retail PS2 emulation                | Synced monthly with upstream PCSX2                                                                                          |
 | Accurate soft-float recompiler      | Optional EE FPU, VU0, and VU1 soft-float recompilers                                                                        |
 | ParaLLEl-GS                         | Experimental Vulkan-based GS renderer with supersampling and analog-display emulation, targeting software renderer accuracy |
+| Low-Latency Audio                   | New low latency sync mode, WASAPI Exclusive and WASAPI IAudioClient3 drivers. Support for sub-frame audio latency ~10ms.    |
 | Optional Mechacon security paths    | Selectable retail, development, prototype, and arcade key-store modes, skipped if not provided                              |
 | DVD Player Support                  | Requires properly setup mechacon keys, NVRAM and ROM1 dump                                                                  |
 | HDD Install Disks and Game Installs | Requires properly setup mechacon keys as well as valid NVRAM and Mech Version file                                          |
