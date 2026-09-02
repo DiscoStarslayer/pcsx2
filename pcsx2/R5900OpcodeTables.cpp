@@ -140,7 +140,7 @@ namespace R5900
 			static const int Div = 14*8;
 			static const int MMI_Mult = 3*8;
 			static const int MMI_Div = 22*8;
-			static const int MMI_Default = 14;
+			static const int MMI_Default = 8;
 
 			static const int FPU_Mult = 4*8;
 

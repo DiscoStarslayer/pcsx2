@@ -66,6 +66,7 @@ static u8 s_nvram[NVRAM_SIZE];
 static constexpr u32 DEFAULT_MECHA_VERSION = 0x00020603;
 static constexpr u8 ARCADE_KELF_OVERRIDE_APPLICATION_TYPE = 0x07;
 static constexpr size_t ARCADE_KELF_OVERRIDE_KEY_SIZE = 16;
+static constexpr u8 CDVD_READ_AHEAD_SECTORS = 24;
 static u32 s_mecha_version = 0;
 
 #pragma pack(push, 1)
@@ -1652,13 +1653,13 @@ __fi void cdvdActionInterrupt()
 
 __fi void cdvdSectorReady()
 {
-	if (cdvd.nextSectorsBuffered < 16)
+	if (cdvd.nextSectorsBuffered < CDVD_READ_AHEAD_SECTORS)
 	{
 		cdvd.nextSectorsBuffered++;
 		CDVD_LOG("Buffering sector");
 	}
 
-	if (cdvd.nextSectorsBuffered < 16)
+	if (cdvd.nextSectorsBuffered < CDVD_READ_AHEAD_SECTORS)
 		CDVDSECTORREADY_INT(cdvd.ReadTime);
 	else if (!cdvd.Reading)
 		cdvdUpdateStatus(CDVD_STATUS_PAUSE);
@@ -1786,7 +1787,7 @@ __fi void cdvdReadInterrupt()
 			cdvdSetIrq();
 			cdvdUpdateReady(CDVD_DRIVE_READY);
 			cdvd.Reading = 0;
-			if (cdvd.nextSectorsBuffered < 16)
+			if (cdvd.nextSectorsBuffered < CDVD_READ_AHEAD_SECTORS)
 				cdvdUpdateStatus(CDVD_STATUS_READ);
 			else
 				cdvdUpdateStatus(CDVD_STATUS_PAUSE);
