@@ -32,7 +32,6 @@ target_compile_definitions(libcdio PRIVATE
 )
 
 if(WIN32)
-	target_include_directories(libcdio PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/.vs")
 	target_compile_definitions(libcdio PRIVATE HAVE_WINDOWS_H=1)
 else()
 	find_package(Iconv REQUIRED)

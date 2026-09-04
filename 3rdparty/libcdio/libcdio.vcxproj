@@ -29,9 +29,9 @@
   <PropertyGroup Label="UserMacros" />
   <ItemDefinitionGroup>
     <ClCompile>
-      <PreprocessorDefinitions>HAVE_CONFIG_H;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>HAVE_ERRNO_H=1;HAVE_FCNTL_H=1;HAVE_INTTYPES_H=1;HAVE_LIMITS_H=1;HAVE_SNPRINTF=1;HAVE_STDARG_H=1;HAVE_STDBOOL_H=1;HAVE_STDINT_H=1;HAVE_STDIO_H=1;HAVE_STDLIB_H=1;HAVE_STRING_H=1;HAVE_SYS_STAT_H=1;HAVE_SYS_TYPES_H=1;HAVE_VSNPRINTF=1;HAVE_WINDOWS_H=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
-      <AdditionalIncludeDirectories>$(ProjectDir).vs;$(ProjectDir)include;$(ProjectDir)lib\driver;$(ProjectDir)lib\driver\mmc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)lib\driver;$(ProjectDir)lib\driver\mmc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>

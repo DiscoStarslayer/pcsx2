@@ -54,12 +54,21 @@ typedef u_int64_t uint64_t;
 
 typedef uint8_t ubyte;
 
-/* MSVC does not define mode_t and ssize_t by default. The way
-   to compensate for missing UNIX types is to include a custom
-   unistd.h that defines them. Such a file is provided with
-   the libcdio source, in the MSVC/missing directory */
+/* MSVC does not define mode_t and ssize_t by default. */
 #if defined(_MSC_VER)
-#include <unistd.h>
+# ifndef _MODE_T_DEFINED
+#  define _MODE_T_DEFINED
+typedef unsigned short mode_t;
+# endif
+# ifndef _SSIZE_T_DEFINED
+#  define _SSIZE_T_DEFINED
+#  undef ssize_t
+#  ifdef _WIN64
+typedef __int64 ssize_t;
+#  else
+typedef int ssize_t;
+#  endif
+# endif
 #endif
 
   /* default HP/UX macros are broken */
