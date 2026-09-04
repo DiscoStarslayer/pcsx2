@@ -34,7 +34,6 @@
 #include <cdio/logging.h>
 #include <cdio/track.h>
 #include <cdio/utf8.h>
-#include <cdio/util.h>
 #include <cdio/version.h>
 
 #ifdef HAVE_STDIO_H
@@ -58,6 +57,8 @@
 #ifdef HAVE_WINDOWS_H
 #include <windows.h>
 #endif
+
+#include <cdio/util.h>
 
 #include <ctype.h>
 

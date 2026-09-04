@@ -29,7 +29,13 @@
 #include <string.h>
 #include <errno.h>
 
-#ifdef HAVE_UNISTD_H
+#ifdef _MSC_VER
+#include <io.h>
+#define close _close
+#define lseek _lseek
+#define open _open
+#define read _read
+#elif defined(HAVE_UNISTD_H)
 #include <unistd.h>
 #endif
 
@@ -57,9 +63,6 @@
 
 /* If available and LFS is enabled, try to use lseek64 */
 #if defined(HAVE_LSEEK64) && defined(_FILE_OFFSET_BITS) && (_FILE_OFFSET_BITS == 64)
-#if defined(_MSC_VER)
-#include <io.h>
-#endif
 #define CDIO_LSEEK lseek64
 #else
 #define CDIO_LSEEK lseek
