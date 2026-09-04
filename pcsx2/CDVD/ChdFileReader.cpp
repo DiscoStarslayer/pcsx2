@@ -3,22 +3,76 @@
 
 #include "ChdFileReader.h"
 
+#include "CDVD/CDVD.h"
+
 #include "common/Assertions.h"
 #include "common/Console.h"
 #include "common/Error.h"
 #include "common/FileSystem.h"
 #include "common/Path.h"
 #include "common/ProgressCallback.h"
-#include "common/SmallString.h"
 #include "common/StringUtil.h"
 
 #include "libchdr/chd.h"
+#include "libchdr/cdrom.h"
 #include "fmt/format.h"
 #include "xxhash.h"
 
+#include <algorithm>
+#include <cstdio>
+#include <cstring>
+#include <limits>
+#include <utility>
+
 static constexpr u32 MAX_PARENTS = 32; // Surely someone wouldn't be insane enough to go beyond this...
+static constexpr u32 METADATA_SIZE = 256;
+
 static std::vector<std::pair<std::string, chd_header>> s_chd_hash_cache; // <filename, header>
 static std::recursive_mutex s_chd_hash_cache_mutex;
+
+template <typename... T>
+static bool Fail(Error* error, fmt::format_string<T...> format, T&&... args)
+{
+	Error::SetStringFmt(error, format, std::forward<T>(args)...);
+	return false;
+}
+
+static u8 GetTrackType(const std::string_view type)
+{
+	if (type == "AUDIO")
+		return CDVD_AUDIO_TRACK;
+	if (type.starts_with("MODE1"))
+		return CDVD_MODE1_TRACK;
+	if (type.starts_with("MODE2"))
+		return CDVD_MODE2_TRACK;
+	return 0;
+}
+
+struct TrackMetadata
+{
+	char type[METADATA_SIZE]{}, pregap_type[METADATA_SIZE]{}, ignored[METADATA_SIZE]{};
+	int number = 0, frames = 0, pregap = 0, postgap = 0;
+	bool HasUnsupportedGaps() const { return (pregap && pregap_type[0] != 'V') || postgap; }
+};
+
+static bool ParseTrackMetadata(const char* metadata, const bool v2, TrackMetadata& track)
+{
+	if (!v2)
+		return std::sscanf(metadata, CDROM_TRACK_METADATA_FORMAT, &track.number, track.type, track.ignored, &track.frames) == 4;
+	return std::sscanf(metadata, CDROM_TRACK_METADATA2_FORMAT, &track.number, track.type, track.ignored, &track.frames,
+			   &track.pregap, track.pregap_type, track.ignored, &track.postgap) == 8;
+}
+
+static void SwapAudioBytes(void* data, const u32 size)
+{
+	// chdman byte-swaps CDDA for compression; restore the original BIN/CUE byte order.
+	u8* const bytes = static_cast<u8*>(data);
+	for (u32 frame_offset = 0; frame_offset < size; frame_offset += CD_FRAME_SIZE)
+	{
+		for (u32 offset = 0; offset < CD_MAX_SECTOR_DATA; offset += 2)
+			std::swap(bytes[frame_offset + offset], bytes[frame_offset + offset + 1]);
+	}
+}
 
 // Provides an implementation of core_file which allows us to control if the underlying FILE handle is freed.
 // Additionally, this class allows greater control and feedback while precaching CHD files.
@@ -204,7 +258,7 @@ ChdFileReader::ChdFileReader() = default;
 
 ChdFileReader::~ChdFileReader()
 {
-	pxAssert(!ChdFile);
+	pxAssert(!m_chd);
 }
 
 static bool IsHeaderParentCHD(const chd_header& header, const chd_header& parent_header)
@@ -374,149 +428,177 @@ bool ChdFileReader::Open2(std::string filename, Error* error)
 	if (!fp)
 		return false;
 
-	ChdFile = OpenCHD(m_filename, std::move(fp), error, 0);
-	if (!ChdFile)
+	m_chd = OpenCHD(m_filename, std::move(fp), error, 0);
+	if (!m_chd)
 		return false;
 
-	const chd_header* chd_header = chd_get_header(ChdFile);
-	hunk_size = chd_header->hunkbytes;
+	const chd_header* header = chd_get_header(m_chd);
+	m_hunk_size = header->hunkbytes;
 	// CHD likes to use full 2448 byte blocks, but keeps the +24 offset of source ISOs
 	// The rest of PCSX2 likes to use 2448 byte buffers, which can't fit that so trim blocks instead
-	m_internalBlockSize = chd_header->unitbytes;
+	m_internalBlockSize = header->unitbytes;
 
-	// The file size in the header is incorrect, each track gets padded to a multiple of 4 frames.
-	// (see chdman.cpp from MAME). Instead, we pull the real frame count from the TOC.
-	u64 total_frames;
-	if (ParseTOC(&total_frames))
+	m_size = static_cast<u64>(header->unitbytes) * header->unitcount;
+	if (!ParseTOC(error))
 	{
-		file_size = total_frames * static_cast<u64>(chd_header->unitbytes);
+		Close2();
+		return false;
 	}
-	else
-	{
+
+	if (m_tracks.empty())
 		Console.Warning("Failed to parse CHD TOC, file size may be incorrect.");
-		file_size = static_cast<u64>(chd_header->unitbytes) * chd_header->unitcount;
-	}
 
 	return true;
 }
 
 bool ChdFileReader::Precache2(ProgressCallback* progress, Error* error)
 {
-	ChdCoreFileWrapper* fileWrapper = ChdCoreFileWrapper::FromCoreFile(chd_core_file(ChdFile));
-	if (!CheckAvailableMemoryForPrecaching(fileWrapper->GetPrecacheSize(), error))
+	ChdCoreFileWrapper* wrapper = ChdCoreFileWrapper::FromCoreFile(chd_core_file(m_chd));
+	if (!CheckAvailableMemoryForPrecaching(wrapper->GetPrecacheSize(), error))
 		return false;
 
-	return fileWrapper->Precache(progress, error);
+	return wrapper->Precache(progress, error);
 }
 
-ThreadedFileReader::Chunk ChdFileReader::ChunkForOffset(u64 offset)
+ThreadedFileReader::Chunk ChdFileReader::ChunkForOffset(const u64 offset)
 {
-	Chunk chunk = {0};
-	if (offset >= file_size)
+	if (offset >= m_size)
+		return {-1, 0, 0};
+
+	if (m_chunk_map.empty())
 	{
-		chunk.chunkID = -1;
+		const s64 id = offset / m_hunk_size;
+		return {id, static_cast<u64>(id) * m_hunk_size, m_hunk_size};
 	}
-	else
-	{
-		chunk.chunkID = offset / hunk_size;
-		chunk.length = hunk_size;
-		chunk.offset = chunk.chunkID * hunk_size;
-	}
-	return chunk;
+
+	auto chunk = std::upper_bound(m_chunk_map.begin(), m_chunk_map.end(), offset,
+		[](const u64 value, const ChunkMap& chunk) { return value < chunk.offset; });
+	--chunk;
+
+	return {static_cast<s64>(chunk - m_chunk_map.begin()), chunk->offset, chunk->length};
 }
 
-int ChdFileReader::ReadChunk(void* dst, s64 chunkID)
+int ChdFileReader::ReadChunk(void* dst, const s64 id)
 {
-	if (chunkID < 0)
+	if (id < 0)
 		return -1;
 
-	chd_error error = chd_read(ChdFile, chunkID, dst);
+	const ChunkMap direct{0, static_cast<u64>(id) * m_hunk_size, m_hunk_size, false};
+	const ChunkMap& chunk = m_chunk_map.empty() ? direct : m_chunk_map[static_cast<size_t>(id)];
+	const u32 hunk_offset = chunk.chd_offset % m_hunk_size;
+	void* const target = (hunk_offset || chunk.length != m_hunk_size) ? m_hunk_buffer.get() : dst;
+	const chd_error error = chd_read(m_chd, static_cast<u32>(chunk.chd_offset / m_hunk_size), target);
 	if (error != CHDERR_NONE)
 	{
 		Console.Error("CDVD: chd_read returned error: %s", chd_error_string(error));
 		return 0;
 	}
 
-	return hunk_size;
+	if (target != dst)
+		std::memcpy(dst, m_hunk_buffer.get() + hunk_offset, chunk.length);
+	if (chunk.audio)
+		SwapAudioBytes(dst, chunk.length);
+	return chunk.length;
 }
 
 void ChdFileReader::Close2()
 {
-	if (ChdFile)
-	{
-		chd_close(ChdFile);
-		ChdFile = nullptr;
-	}
+	if (m_chd)
+		chd_close(m_chd);
+	m_chd = nullptr;
+	m_hunk_buffer.reset();
+	m_chunk_map.clear();
+	m_tracks.clear();
+	m_size = 0;
+	m_hunk_size = 0;
 }
 
 u32 ChdFileReader::GetBlockCount() const
 {
-	return (file_size - m_dataoffset) / m_internalBlockSize;
+	return (m_size > m_dataoffset) ? static_cast<u32>((m_size - m_dataoffset) / m_internalBlockSize) : 0;
 }
 
-bool ChdFileReader::ParseTOC(u64* out_frame_count)
+void ChdFileReader::MapTrack(u64 disc_offset, u64 chd_offset, const u32 frames, const bool audio)
 {
-	u64 total_frames = 0;
-	int max_found_track = -1;
-
-	for (int search_index = 0;; search_index++)
+	const u64 disc_end = disc_offset + (static_cast<u64>(frames) * CD_FRAME_SIZE);
+	while (disc_offset < disc_end)
 	{
-		char metadata_str[256];
-		char type_str[256];
-		char subtype_str[256];
-		char pgtype_str[256];
-		char pgsub_str[256];
-		u32 metadata_length;
-
-		int track_num = 0, frames = 0, pregap_frames = 0, postgap_frames = 0;
-		chd_error err = chd_get_metadata(ChdFile, CDROM_TRACK_METADATA2_TAG, search_index, metadata_str, sizeof(metadata_str),
-			&metadata_length, nullptr, nullptr);
-		if (err == CHDERR_NONE)
-		{
-			if (std::sscanf(metadata_str, CDROM_TRACK_METADATA2_FORMAT, &track_num, type_str, subtype_str, &frames,
-					&pregap_frames, pgtype_str, pgsub_str, &postgap_frames) != 8)
-			{
-				Console.Error(fmt::format("Invalid track v2 metadata: '{}'", metadata_str));
-				return false;
-			}
-		}
-		else
-		{
-			// try old version
-			err = chd_get_metadata(ChdFile, CDROM_TRACK_METADATA_TAG, search_index, metadata_str, sizeof(metadata_str),
-				&metadata_length, nullptr, nullptr);
-			if (err != CHDERR_NONE)
-			{
-				// not found, so no more tracks
-				break;
-			}
-
-			if (std::sscanf(metadata_str, CDROM_TRACK_METADATA_FORMAT, &track_num, type_str, subtype_str, &frames) != 4)
-			{
-				Console.Error(fmt::format("Invalid track metadata: '{}'", metadata_str));
-				return false;
-			}
-		}
-
-		DevCon.WriteLn(fmt::format("CHD Track {}: frames:{} pregap:{} postgap:{} type:{} sub:{} pgtype:{} pgsub:{}",
-			track_num, frames, pregap_frames, postgap_frames, type_str, subtype_str, pgtype_str, pgsub_str));
-
-		// PCSX2 doesn't currently support multiple tracks for CDs.
-		if (track_num != 1)
-		{
-			Console.Warning(fmt::format("  Ignoring track {} in CHD.", track_num, frames));
-			continue;
-		}
-
-		total_frames += static_cast<u64>(pregap_frames) + static_cast<u64>(frames) + static_cast<u64>(postgap_frames);
-		max_found_track = std::max(max_found_track, track_num);
+		const u32 length =
+			static_cast<u32>(std::min<u64>(disc_end - disc_offset, m_hunk_size - (chd_offset % m_hunk_size)));
+		m_chunk_map.push_back({disc_offset, chd_offset, length, audio});
+		disc_offset += length;
+		chd_offset += length;
 	}
+}
 
-	// No tracks in TOC?
-	if (max_found_track < 0)
-		return false;
+bool ChdFileReader::AddTrack(
+	const char* metadata, const bool v2, u64& disc_frame, u64& chd_frame, Error* error)
+{
+	TrackMetadata track;
+	if (!ParseTrackMetadata(metadata, v2, track))
+		return Fail(error, "Invalid CHD track metadata: '{}'", metadata);
 
-	// Compute total data size.
-	*out_frame_count = total_frames;
+	if (track.number != static_cast<int>(m_tracks.size()) + 1 || track.number > CD_MAX_TRACKS || track.frames <= 0 ||
+		track.pregap < 0 || track.pregap > track.frames || track.postgap < 0)
+		return Fail(error, "CHD track {} has invalid numbering or frame counts", track.number);
+
+	if (track.HasUnsupportedGaps())
+		return Fail(error, "CHD track {} uses unsupported non-virtual pregap or postgap data", track.number);
+
+	const u8 type = GetTrackType(track.type);
+	if (!type)
+		return Fail(error, "CHD track {} has unsupported type '{}'", track.number, track.type);
+
+	const u32 frames = static_cast<u32>(track.frames);
+	const u64 padded_frames = (frames + CD_TRACK_PADDING - 1) & ~(CD_TRACK_PADDING - 1);
+	if (disc_frame + frames > std::numeric_limits<u32>::max() ||
+		chd_frame + padded_frames > chd_get_header(m_chd)->unitcount)
+		return Fail(error, "CHD track metadata exceeds the image size");
+
+	m_tracks.push_back({static_cast<u8>(track.number), type, static_cast<u32>(disc_frame),
+		static_cast<u32>(disc_frame + track.pregap)});
+	MapTrack(disc_frame * CD_FRAME_SIZE, chd_frame * CD_FRAME_SIZE, frames, type == CDVD_AUDIO_TRACK);
+	disc_frame += frames;
+	chd_frame += padded_frames;
 	return true;
+}
+
+bool ChdFileReader::ReadTracks(char* metadata, const u32 tag, const bool v2, Error* error)
+{
+	u64 disc_frame = 0;
+	u64 chd_frame = 0;
+	chd_error err = CHDERR_NONE;
+	for (u32 index = 0; err == CHDERR_NONE; index++)
+	{
+		if (!AddTrack(metadata, v2, disc_frame, chd_frame, error))
+			return false;
+		err = chd_get_metadata(m_chd, tag, index + 1, metadata, METADATA_SIZE, nullptr, nullptr, nullptr);
+	}
+	if (err != CHDERR_METADATA_NOT_FOUND)
+		return Fail(error, "Failed to read CHD track metadata: {}", chd_error_string(err));
+
+	m_size = disc_frame * CD_FRAME_SIZE;
+	m_hunk_buffer = std::make_unique_for_overwrite<u8[]>(m_hunk_size);
+	return true;
+}
+
+bool ChdFileReader::ParseTOC(Error* error)
+{
+	char metadata[METADATA_SIZE]{};
+	chd_error err = chd_get_metadata(
+		m_chd, CDROM_TRACK_METADATA2_TAG, 0, metadata, sizeof(metadata), nullptr, nullptr, nullptr);
+	const bool v2 = err != CHDERR_METADATA_NOT_FOUND;
+	if (!v2)
+		err = chd_get_metadata(
+			m_chd, CDROM_TRACK_METADATA_TAG, 0, metadata, sizeof(metadata), nullptr, nullptr, nullptr);
+	if (err == CHDERR_METADATA_NOT_FOUND)
+		return true;
+	if (err != CHDERR_NONE)
+		return Fail(error, "Failed to read CHD track metadata: {}", chd_error_string(err));
+
+	if (m_internalBlockSize != CD_FRAME_SIZE || !m_hunk_size || m_hunk_size % CD_FRAME_SIZE)
+		return Fail(error, "CHD has invalid CD frame or hunk size ({} and {})", m_internalBlockSize, m_hunk_size);
+
+	const u32 tag = v2 ? CDROM_TRACK_METADATA2_TAG : CDROM_TRACK_METADATA_TAG;
+	return ReadTracks(metadata, tag, v2, error);
 }

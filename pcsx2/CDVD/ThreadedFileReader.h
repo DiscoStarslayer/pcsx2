@@ -5,10 +5,11 @@
 
 #include "common/Pcsx2Defs.h"
 
-#include <thread>
-#include <mutex>
 #include <atomic>
 #include <condition_variable>
+#include <mutex>
+#include <span>
+#include <thread>
 
 class Error;
 class ProgressCallback;
@@ -18,6 +19,7 @@ class ProgressCallback;
 class ThreadedFileReader
 {
 	ThreadedFileReader(ThreadedFileReader&&) = delete;
+
 protected:
 	std::string m_filename;
 
@@ -107,13 +109,21 @@ private:
 	bool TryCachedRead(void*& buffer, u64& offset, u32& size, const std::lock_guard<std::mutex>&);
 
 public:
+	struct Track
+	{
+		u8 number = 0;
+		u8 type = 0;
+		u32 index0_lsn = 0;
+		u32 index1_lsn = 0;
+	};
+
 	virtual ~ThreadedFileReader();
 
 	const std::string& GetFilename() const { return m_filename; }
 	u32 GetBlockSize() const { return m_blocksize; }
 
 	virtual u32 GetBlockCount() const = 0;
-
+	virtual std::span<const Track> GetTracks() const { return {}; }
 
 	bool Open(std::string filename, Error* error);
 	bool Precache(ProgressCallback* progress, Error* error);

@@ -174,13 +174,3 @@ bool CueFileReader::ReadSectors(void* dst, const u32 lsn, const u32 count) const
 {
 	return cdio_bincue_read_raw_sectors(m_cdio, dst, static_cast<lsn_t>(lsn), count) == DRIVER_OP_SUCCESS;
 }
-
-const CueFileReader::Track* CueFileReader::FindTrack(const u32 lsn) const
-{
-	if (lsn >= m_blocks)
-		return nullptr;
-
-	const auto it = std::find_if(m_tracks.rbegin(), m_tracks.rend(),
-		[lsn](const Track& track) { return lsn >= track.index0_lsn; });
-	return (it == m_tracks.rend()) ? nullptr : &*it;
-}

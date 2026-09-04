@@ -19,7 +19,7 @@ static constexpr u32 MINIMUM_SIZE = 128 * 1024;
 
 ThreadedFileReader::ThreadedFileReader()
 {
-	m_readThread = std::thread([](ThreadedFileReader* r){ r->Loop(); }, this);
+	m_readThread = std::thread([](ThreadedFileReader* r) { r->Loop(); }, this);
 }
 
 ThreadedFileReader::~ThreadedFileReader()
@@ -260,7 +260,7 @@ bool ThreadedFileReader::Precache(ProgressCallback* progress, Error* error)
 
 bool ThreadedFileReader::Precache2(ProgressCallback* progress, Error* error)
 {
-	Error::SetStringView(error, TRANSLATE_SV("CDVD","Precaching is not supported for this file format."));
+	Error::SetStringView(error, TRANSLATE_SV("CDVD", "Precaching is not supported for this file format."));
 	return false;
 }
 

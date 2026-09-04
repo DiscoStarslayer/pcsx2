@@ -16,14 +16,6 @@ class CueFileReader final : public ThreadedFileReader
 	DeclareNoncopyableObject(CueFileReader);
 
 protected:
-	struct Track
-	{
-		u8 number = 0;
-		u8 type = 0;
-		u32 index0_lsn = 0;
-		u32 index1_lsn = 0;
-	};
-
 	_CdIo* m_cdio = nullptr;
 
 	std::vector<std::string> m_data_files;
@@ -49,8 +41,7 @@ public:
 	bool Precache2(ProgressCallback* progress, Error* error) override;
 
 	const std::vector<std::string>& GetDataFiles() const { return m_data_files; }
-	const std::vector<Track>& GetTracks() const { return m_tracks; }
-	const Track* FindTrack(u32 lsn) const;
+	std::span<const Track> GetTracks() const override { return m_tracks; }
 
 protected:
 	u64 GetSize() const { return static_cast<u64>(m_blocks) * RAW_SECTOR_SIZE; }

@@ -11,7 +11,6 @@
 
 class Error;
 class ProgressCallback;
-class CueFileReader;
 
 enum isoType
 {
@@ -59,8 +58,11 @@ public:
 
 	isoType GetType() const noexcept { return m_type; }
 	uint GetBlockCount() const noexcept { return m_blocks; }
-	int GetBlockOffset() const  noexcept { return m_blockofs; }
-	const CueFileReader* GetCueReader() const;
+	int GetBlockOffset() const noexcept { return m_blockofs; }
+	std::span<const ThreadedFileReader::Track> GetTracks() const
+	{
+		return m_reader ? m_reader->GetTracks() : std::span<const ThreadedFileReader::Track>();
+	}
 
 	const std::string& GetFilename() const
 	{

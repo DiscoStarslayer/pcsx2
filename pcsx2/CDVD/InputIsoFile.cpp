@@ -193,13 +193,6 @@ void InputIsoFile::_init()
 	m_reader.reset();
 }
 
-const CueFileReader* InputIsoFile::GetCueReader() const
-{
-	return StringUtil::compareNoCase(Path::GetExtension(m_filename), "cue") ?
-	           static_cast<const CueFileReader*>(m_reader.get()) :
-	           nullptr;
-}
-
 bool InputIsoFile::Open(std::string srcfile, Error* error)
 {
 	Close();

@@ -3,12 +3,12 @@
 
 #include "IsoFileFormats.h"
 #include "CDVD/CDVD.h"
-#include "CDVD/CueFileReader.h"
 
 #include "common/Assertions.h"
 #include "common/Console.h"
 #include "common/Error.h"
 
+#include <algorithm>
 #include <array>
 #include <cstring>
 
@@ -30,19 +30,19 @@ static bool ISOSetTracks()
 	strack = etrack = 1;
 	tracks[1].type = CDVD_MODE1_TRACK;
 
-	const CueFileReader* const cue = iso.GetCueReader();
-	if (!cue)
+	const auto iso_tracks = iso.GetTracks();
+	if (iso_tracks.empty())
 		return false;
 
-	strack = cue->GetTracks().front().number;
-	etrack = cue->GetTracks().back().number;
+	strack = iso_tracks.front().number;
+	etrack = iso_tracks.back().number;
 	bool has_audio = false;
-	for (const auto& cue_track : cue->GetTracks())
+	for (const auto& track : iso_tracks)
 	{
-		cdvdTrack& track = tracks[cue_track.number];
-		track.start_lba = cue_track.index1_lsn;
-		track.type = cue_track.type;
-		has_audio |= (cue_track.type == CDVD_AUDIO_TRACK);
+		cdvdTrack& cdvd_track = tracks[track.number];
+		cdvd_track.start_lba = track.index1_lsn;
+		cdvd_track.type = track.type;
+		has_audio |= (track.type == CDVD_AUDIO_TRACK);
 	}
 	return has_audio;
 }
@@ -109,16 +109,19 @@ static s32 ISOreadSubQ(u32 lsn, cdvdSubQ* subq)
 	u32 track_frames = lsn + 150;
 	u32 disc_frames = lsn + 300;
 
-	if (const CueFileReader* const cue = iso.GetCueReader())
+	const auto iso_tracks = iso.GetTracks();
+	if (!iso_tracks.empty())
 	{
-		const auto* const track = cue->FindTrack(lsn);
-		if (!track)
+		const auto track = std::find_if(iso_tracks.rbegin(), iso_tracks.rend(),
+			[lsn](const auto& candidate) { return lsn >= candidate.index0_lsn; });
+		if (track == iso_tracks.rend())
 			return -1;
 
-		const bool is_pregap = (lsn < track->index1_lsn);
-		// Pregap countdowns need proper testing against physical hardware.
+		const bool is_pregap = lsn < track->index1_lsn;
+
 		track_frames = is_pregap ? (track->index1_lsn - lsn) : (lsn - track->index1_lsn);
 		disc_frames = lsn + 150;
+
 		subq->ctrl = track->type;
 		subq->trackNum = itob(track->number);
 		subq->trackIndex = is_pregap ? 0 : 1;
