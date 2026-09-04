@@ -231,6 +231,7 @@ set(pcsx2CDVDSources
 	CDVD/IsoReader.cpp
 	CDVD/OutputIsoFile.cpp
 	CDVD/ChdFileReader.cpp
+	CDVD/CueFileReader.cpp
 	CDVD/CsoFileReader.cpp
 	CDVD/GzippedFileReader.cpp
 	CDVD/ThreadedFileReader.cpp
@@ -245,6 +246,7 @@ set(pcsx2CDVDHeaders
 	CDVD/CDVD_internal.h
 	CDVD/CDVDdiscReader.h
 	CDVD/ChdFileReader.h
+	CDVD/CueFileReader.h
 	CDVD/CsoFileReader.h
 	CDVD/FlatFileReader.h
 	CDVD/GzippedFileReader.h
@@ -1225,6 +1227,7 @@ target_link_libraries(PCSX2_FLAGS INTERFACE
 	imgui
 	fmt::fmt
 	libchdr
+	libcdio::libcdio
 	libzip::zip
 	cpuinfo
 	cubeb

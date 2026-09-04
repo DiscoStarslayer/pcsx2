@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0+
 
 #include "CDVD/CDVD.h"
+#include "CDVD/CueFileReader.h"
 #include "Elfheader.h"
 #include "GameList.h"
 #include "Host.h"
@@ -39,7 +40,7 @@ namespace GameList
 	enum : u32
 	{
 		GAME_LIST_CACHE_SIGNATURE = 0x45434C47,
-		GAME_LIST_CACHE_VERSION = 39,
+		GAME_LIST_CACHE_VERSION = 40,
 
 
 		PLAYED_TIME_SERIAL_LENGTH = 32,
@@ -58,6 +59,8 @@ namespace GameList
 	using PlayedTimeMap = UnorderedStringMap<PlayedTimeEntry>;
 
 	static bool IsScannableFilename(const std::string_view path);
+	static std::string GetPathKey(const std::string_view path);
+	static UnorderedStringSet FindCueDataFiles(const FileSystem::FindResultsArray& files);
 
 	static bool GetIsoSerialAndCRC(const std::string& path, s32* disc_type, std::string* serial, u32* crc);
 	static Region ParseDatabaseRegion(const std::string_view db_region);
@@ -241,6 +244,36 @@ const char* GameList::EntryCompatibilityRatingToString(CompatibilityRating ratin
 bool GameList::IsScannableFilename(const std::string_view path)
 {
 	return VMManager::IsDiscFileName(path) || VMManager::IsElfFileName(path);
+}
+
+std::string GameList::GetPathKey(const std::string_view path)
+{
+#ifdef _WIN32
+	return StringUtil::toLower(Path::Canonicalize(path));
+#else
+	return Path::Canonicalize(path);
+#endif
+}
+
+UnorderedStringSet GameList::FindCueDataFiles(const FileSystem::FindResultsArray& files)
+{
+	UnorderedStringSet paths;
+	for (const FILESYSTEM_FIND_DATA& file : files)
+	{
+		if (!StringUtil::EndsWithNoCase(file.FileName, ".cue"))
+			continue;
+
+		CueFileReader cue;
+		if (!cue.Open(file.FileName, nullptr))
+			continue;
+
+		for (const std::string& path : cue.GetDataFiles())
+			paths.emplace(GetPathKey(path));
+
+		cue.Close();
+	}
+
+	return paths;
 }
 
 void GameList::FillBootParametersForEntry(VMBootParameters* params, const Entry* entry)
@@ -1129,6 +1162,7 @@ void GameList::ScanDirectory(const char* path, bool recursive, bool only_cache, 
 		recursive ? (FILESYSTEM_FIND_FILES | FILESYSTEM_FIND_HIDDEN_FILES | FILESYSTEM_FIND_RECURSIVE) :
 					(FILESYSTEM_FIND_FILES | FILESYSTEM_FIND_HIDDEN_FILES),
 		&files, progress);
+	const UnorderedStringSet cue_data_files = FindCueDataFiles(files);
 
 	u32 files_scanned = 0;
 	progress->SetProgressRange(static_cast<u32>(files.size()));
@@ -1138,7 +1172,8 @@ void GameList::ScanDirectory(const char* path, bool recursive, bool only_cache, 
 	{
 		files_scanned++;
 
-		if (progress->IsCancelled() || !GameList::IsScannableFilename(ffd.FileName) || IsPathExcluded(excluded_paths, ffd.FileName))
+		if (progress->IsCancelled() || !GameList::IsScannableFilename(ffd.FileName) || IsPathExcluded(excluded_paths, ffd.FileName) ||
+			cue_data_files.contains(GetPathKey(ffd.FileName)))
 		{
 			continue;
 		}

@@ -1,0 +1,600 @@
+// Test that number of tracks entered is less than maximum allowed.
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"
+
+TRACK AUDIO
+DATAFILE "/dev/null"

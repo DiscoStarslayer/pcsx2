@@ -1,0 +1,105 @@
+#!@SHELL@
+
+if test -z $srcdir ; then
+  srcdir=$(pwd)
+fi
+
+if test "X$top_builddir" = "X" ; then
+  top_builddir=$(pwd)/..
+fi
+
+. ${top_builddir}/test/check_common_fn
+
+if test ! -x ../src/iso-info@EXEEXT@ ; then
+  exit 77
+fi
+
+BASE=$(basename $0 .sh)
+fname=copying
+
+opts="--quiet ${srcdir}/data/${fname}.iso --iso9660 "
+test_iso_info  "$opts" ${fname}.dump ${srcdir}/${fname}.right
+RC=$?
+check_result $RC 'iso-info basic test' "$ISO_INFO $opts"
+
+opts="--ignore --image ${srcdir}/data/${fname}.iso --extract $fname "
+test_iso_read  "$opts" ${fname} ${srcdir}/copying.gpl
+RC=$?
+check_result $RC 'iso-read basic test' "$ISO_READ $opts"
+
+if test -n "@HAVE_ROCK@"; then
+  fname=copying-rr
+  if test -n "@MINGW32@"; then
+      right_file=${fname}-mingw.right
+  else
+      right_file=${fname}.right
+  fi
+  opts="--quiet ${srcdir}/data/${fname}.iso --iso9660 "
+  test_iso_info  "$opts" ${fname}.dump ${srcdir}/${right_file}
+  RC=$?
+  check_result $RC 'iso-info Rock Ridge test' "$ISO_INFO $opts"
+
+  opts="--image ${srcdir}/data/${fname}.iso --extract COPYING"
+  test_iso_read  "$opts" ${fname} ${srcdir}/copying-rr.gpl
+  RC=$?
+  check_result $RC 'iso-read RR test' "$ISO_READ $opts"
+fi
+
+if test -n "@HAVE_JOLIET@" ; then
+  BASE=$(basename $0 .sh)
+  fname=joliet
+  opts="--quiet ${srcdir}/data/${fname}.iso --iso9660 "
+  test_iso_info  "$opts" ${fname}-nojoliet.dump ${srcdir}/${fname}.right
+  RC=$?
+  check_result $RC 'iso-info Joliet test' "$cmdline"
+  opts="--quiet ${srcdir}/data/${fname}.iso --iso9660 --no-joliet "
+  test_iso_info  "$opts" ${fname}-nojoliet.dump \
+                 ${srcdir}/${fname}-nojoliet.right
+  RC=$?
+  check_result $RC 'iso-info --no-joliet test' "$cmdline"
+fi
+
+for fname in malformed malformed2; do
+    opts="--quiet ${srcdir}/data/${fname}.iso -f "
+    test_iso_info  "$opts" ${fname}.dump ${srcdir}/${fname}.right
+    BAD_RC=$?
+    if test $BAD_RC -ne  0 ; then
+	check_result 0 "iso-info $fname test" "$cmdline"
+    else
+	echo "$0: in $fname Expecting nonzero return"
+	RC=1
+    fi
+done
+
+extract_base=/tmp/iso-path-$$
+extract_dir=$extract_base/out
+bad_iso=$extract_base.iso
+escaped_file=$extract_base/escaped.txt
+payload=$extract_dir.payload
+mkdir "$extract_base"
+cp "${srcdir}/data/copying.iso" "$bad_iso"
+printf '../escaped.txt' > "$payload"
+printf '\060' > "$extract_dir.record-length"
+printf '\016' > "$extract_dir.name-length"
+dd if="$extract_dir.record-length" of="$bad_iso" bs=1 seek=$((23 * 2048 + 68)) conv=notrunc 2>/dev/null
+dd if="$extract_dir.name-length" of="$bad_iso" bs=1 seek=$((23 * 2048 + 68 + 32)) conv=notrunc 2>/dev/null
+dd if="$payload" of="$bad_iso" bs=1 seek=$((23 * 2048 + 68 + 33)) conv=notrunc 2>/dev/null
+cmd="../example/extract $bad_iso $extract_dir"
+$cmd >/dev/null 2>&1
+RC=$?
+if test -e "$escaped_file" ; then
+    echo "$0: extractor wrote outside the ISO destination"
+    RC=1
+fi
+rm -f "$bad_iso" "$payload" "$extract_dir.record-length" "$extract_dir.name-length" "$escaped_file"
+if test -d "$extract_base" ; then
+    rm -fr "$extract_base"
+fi
+check_result $RC 'ISO extraction path test' "$cmd"
+
+exit $RC
+
+#;;; Local Variables: ***
+#;;; mode:shell-script ***
+#;;; eval: (sh-set-shell "bash") ***
+#;;; End: ***

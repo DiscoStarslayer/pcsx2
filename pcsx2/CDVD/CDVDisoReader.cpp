@@ -3,13 +3,14 @@
 
 #include "IsoFileFormats.h"
 #include "CDVD/CDVD.h"
+#include "CDVD/CueFileReader.h"
 
 #include "common/Assertions.h"
 #include "common/Console.h"
 #include "common/Error.h"
 
-#include <cstring>
 #include <array>
+#include <cstring>
 
 static InputIsoFile iso;
 
@@ -21,6 +22,36 @@ static bool layer1searched = false;
 static void ISOclose()
 {
 	iso.Close();
+}
+
+static bool ISOSetTracks()
+{
+	tracks.fill({});
+	strack = etrack = 1;
+	tracks[1].type = CDVD_MODE1_TRACK;
+
+	const CueFileReader* const cue = iso.GetCueReader();
+	if (!cue)
+		return false;
+
+	strack = cue->GetTracks().front().number;
+	etrack = cue->GetTracks().back().number;
+	bool has_audio = false;
+	for (const auto& cue_track : cue->GetTracks())
+	{
+		cdvdTrack& track = tracks[cue_track.number];
+		track.start_lba = cue_track.index1_lsn;
+		track.type = cue_track.type;
+		has_audio |= (cue_track.type == CDVD_AUDIO_TRACK);
+	}
+	return has_audio;
+}
+
+static void FramesToMSF(const u32 frames, u8* msf)
+{
+	msf[0] = itob(static_cast<u8>(frames / (60 * 75)));
+	msf[1] = itob(static_cast<u8>((frames / 75) % 60));
+	msf[2] = itob(static_cast<u8>(frames % 75));
 }
 
 static bool ISOopen(std::string filename, Error* error)
@@ -36,6 +67,8 @@ static bool ISOopen(std::string filename, Error* error)
 	if (!iso.Open(std::move(filename), error))
 		return false;
 
+	const bool has_audio = ISOSetTracks();
+
 	switch (iso.GetType())
 	{
 		case ISOTYPE_DVD:
@@ -43,6 +76,9 @@ static bool ISOopen(std::string filename, Error* error)
 			break;
 		case ISOTYPE_AUDIO:
 			cdtype = CDVD_TYPE_CDDA;
+			break;
+		case ISOTYPE_CD:
+			cdtype = has_audio ? CDVD_TYPE_PS2CDDA : CDVD_TYPE_PS2CD;
 			break;
 		default:
 			cdtype = CDVD_TYPE_PS2CD;
@@ -62,32 +98,44 @@ static bool ISOprecache(ProgressCallback* progress, Error* error)
 
 static s32 ISOreadSubQ(u32 lsn, cdvdSubQ* subq)
 {
+	if (lsn >= iso.GetBlockCount())
+		return -1;
+
+	std::memset(subq, 0, sizeof(*subq));
+	if (const CueFileReader* const cue = iso.GetCueReader())
+	{
+		const auto* const track = cue->FindTrack(lsn);
+		if (!track)
+			return -1;
+
+		const bool is_pregap = (lsn < track->index1_lsn);
+		const u32 relative_frames = is_pregap ? (track->index1_lsn - lsn) : (lsn - track->index1_lsn);
+
+		subq->ctrl = track->type;
+		subq->adr = 1;
+		subq->trackNum = itob(track->number);
+		subq->trackIndex = is_pregap ? 0 : 1;
+
+		FramesToMSF(relative_frames, &subq->trackM);
+		FramesToMSF(lsn + 150, &subq->discM);
+		return 0;
+	}
+
 	// fake it
-	u8 min, sec, frm;
 	subq->ctrl = 4;
 	subq->adr = 1;
 	subq->trackNum = itob(1);
 	subq->trackIndex = itob(1);
-
-	lba_to_msf(lsn, &min, &sec, &frm);
-	subq->trackM = itob(min);
-	subq->trackS = itob(sec);
-	subq->trackF = itob(frm);
-
-	subq->pad = 0;
-
-	lba_to_msf(lsn + (2 * 75), &min, &sec, &frm);
-	subq->discM = itob(min);
-	subq->discS = itob(sec);
-	subq->discF = itob(frm);
+	FramesToMSF(lsn + 150, &subq->trackM);
+	FramesToMSF(lsn + 300, &subq->discM);
 
 	return 0;
 }
 
 static s32 ISOgetTN(cdvdTN* Buffer)
 {
-	Buffer->strack = 1;
-	Buffer->etrack = 1;
+	Buffer->strack = strack;
+	Buffer->etrack = etrack;
 
 	return 0;
 }
@@ -97,13 +145,15 @@ static s32 ISOgetTD(u8 Track, cdvdTD* Buffer)
 	if (Track == 0)
 	{
 		Buffer->lsn = iso.GetBlockCount();
-	}
-	else
-	{
-		Buffer->type = CDVD_MODE1_TRACK;
-		Buffer->lsn = 0;
+		Buffer->type = 0;
+		return 0;
 	}
 
+	if (Track < strack || Track > etrack)
+		return -1;
+
+	Buffer->type = tracks[Track].type;
+	Buffer->lsn = tracks[Track].start_lba;
 	return 0;
 }
 
@@ -264,7 +314,6 @@ static s32 ISOgetTOC(void* toc)
 		// cd toc
 		// (could be replaced by 1 command that reads the full toc)
 		u8 min, sec, frm;
-		s32 i, err;
 		cdvdTN diskInfo;
 		cdvdTD trackInfo;
 		memset(tocBuff, 0, 1024);
@@ -294,16 +343,17 @@ static s32 ISOgetTOC(void* toc)
 		tocBuff[28] = itob(sec);
 		tocBuff[29] = itob(frm);
 
-		// TODO: When cue support is added, this will need to account for pregap.
-		for (i = diskInfo.strack; i <= diskInfo.etrack; i++)
+		for (u8 track = diskInfo.strack; track <= diskInfo.etrack; track++)
 		{
-			err = ISOgetTD(i, &trackInfo);
+			ISOgetTD(track, &trackInfo);
 			lba_to_msf(trackInfo.lsn, &min, &sec, &frm);
-			tocBuff[i * 10 + 30] = trackInfo.type;
-			tocBuff[i * 10 + 32] = err == -1 ? 0 : itob(i); //number
-			tocBuff[i * 10 + 37] = itob(min);
-			tocBuff[i * 10 + 38] = itob(sec);
-			tocBuff[i * 10 + 39] = itob(frm);
+
+			const u32 offset = (track - diskInfo.strack) * 10 + 30;
+			tocBuff[offset] = trackInfo.type;
+			tocBuff[offset + 2] = itob(track);
+			tocBuff[offset + 7] = itob(min);
+			tocBuff[offset + 8] = itob(sec);
+			tocBuff[offset + 9] = itob(frm);
 		}
 	}
 	else

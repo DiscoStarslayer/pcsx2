@@ -2590,7 +2590,7 @@ bool VMManager::IsSaveStateFileName(const std::string_view path)
 
 bool VMManager::IsDiscFileName(const std::string_view path)
 {
-	static const char* extensions[] = {".iso", ".bin", ".img", ".mdf", ".gz", ".cso", ".zso", ".chd", ".py1", ".py2"};
+	static const char* extensions[] = {".iso", ".bin", ".cue", ".img", ".mdf", ".gz", ".cso", ".zso", ".chd", ".py1", ".py2"};
 
 	for (const char* test_extension : extensions)
 	{

@@ -779,6 +779,9 @@
     <ClCompile Include="CDVD\CsoFileReader.cpp">
       <Filter>System\ISO</Filter>
     </ClCompile>
+    <ClCompile Include="CDVD\CueFileReader.cpp">
+      <Filter>System\ISO</Filter>
+    </ClCompile>
     <ClCompile Include="CDVD\GzippedFileReader.cpp">
       <Filter>System\ISO</Filter>
     </ClCompile>
@@ -1767,6 +1770,9 @@
       <Filter>System\ISO</Filter>
     </ClInclude>
     <ClInclude Include="CDVD\CsoFileReader.h">
+      <Filter>System\ISO</Filter>
+    </ClInclude>
+    <ClInclude Include="CDVD\CueFileReader.h">
       <Filter>System\ISO</Filter>
     </ClInclude>
     <ClInclude Include="CDVD\GzippedFileReader.h">

@@ -1,0 +1,3 @@
+// ISRC applies to a track and must not precede TRACK.
+CD_DA
+ISRC "AAAAAAAAAAAA"

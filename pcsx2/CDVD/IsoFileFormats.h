@@ -11,6 +11,7 @@
 
 class Error;
 class ProgressCallback;
+class CueFileReader;
 
 enum isoType
 {
@@ -33,6 +34,7 @@ class InputIsoFile final
 protected:
 	std::string m_filename;
 	std::unique_ptr<ThreadedFileReader> m_reader;
+	CueFileReader* m_cue_reader = nullptr;
 
 	u32 m_current_lsn;
 
@@ -59,6 +61,7 @@ public:
 	isoType GetType() const noexcept { return m_type; }
 	uint GetBlockCount() const noexcept { return m_blocks; }
 	int GetBlockOffset() const  noexcept { return m_blockofs; }
+	const CueFileReader* GetCueReader() const { return m_cue_reader; }
 
 	const std::string& GetFilename() const
 	{

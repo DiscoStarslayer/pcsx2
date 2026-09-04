@@ -40,6 +40,7 @@
       <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(SolutionDir)3rdparty\des</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(SolutionDir)3rdparty\winwil\include</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(SolutionDir)3rdparty\libchdr\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(SolutionDir)3rdparty\libcdio\include</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(SolutionDir)3rdparty\cubeb\include</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(SolutionDir)3rdparty\imgui\include</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(SolutionDir)3rdparty\simpleini\include</AdditionalIncludeDirectories>
@@ -142,6 +143,7 @@
     <ClCompile Include="CDVD\CDVDdiscReader.cpp" />
     <ClCompile Include="CDVD\CDVDdiscThread.cpp" />
     <ClCompile Include="CDVD\ChdFileReader.cpp" />
+    <ClCompile Include="CDVD\CueFileReader.cpp" />
     <ClCompile Include="CDVD\CsoFileReader.cpp" />
     <ClCompile Include="CDVD\FlatFileReader.cpp" />
     <ClCompile Include="CDVD\GzippedFileReader.cpp" />
@@ -670,6 +672,7 @@
     <ClInclude Include="CDVD\CDVDdiscReader.h" />
     <ClInclude Include="CDVD\CsoFileReader.h" />
     <ClInclude Include="CDVD\ChdFileReader.h" />
+    <ClInclude Include="CDVD\CueFileReader.h" />
     <ClInclude Include="CDVD\FlatFileReader.h" />
     <ClInclude Include="CDVD\GzippedFileReader.h" />
     <ClInclude Include="CDVD\IsoReader.h" />
@@ -1080,6 +1083,9 @@
     </ProjectReference>
     <ProjectReference Include="$(SolutionDir)3rdparty\libchdr\libchdr.vcxproj">
       <Project>{a0d2b3ad-1f72-4ee3-8b5c-f2c358da35f0}</Project>
+    </ProjectReference>
+    <ProjectReference Include="$(SolutionDir)3rdparty\libcdio\libcdio.vcxproj">
+      <Project>{ca84151a-201c-4971-a57b-0bf24a62bed5}</Project>
     </ProjectReference>
     <ProjectReference Include="$(SolutionDir)3rdparty\cubeb\cubeb.vcxproj">
       <Project>{bf74c473-dc04-44b3-92e8-4145f4e77342}</Project>

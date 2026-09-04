@@ -1,0 +1,151 @@
+Acts1631
+  More bounds checking and field validation in UDF and images readers (Nero, ISO9660, cdrdao)
+
+Adrian Reber
+  Redhat Packaging
+  Fix format string mismatch, and misc bug fixes
+
+BrunoSX
+  Add key `joliet-level` in cdio creation driver argument
+
+Burkhard Plaum <plaum@ipf.uni-stuttgart.de>
+  some GNU/Linux and CD-Text patches
+
+Carlo Bramini
+  fixes for Mingw+MSYS and DLL support
+
+Chris Clayton
+  2.0.0 testing
+
+Christophe Fergeau
+  Add UDF reading to iso-read and iso-info
+
+Dagobert Michelsen
+  Solaris compilation issues and the wonderful test Solaris
+  test platform opencsw.org
+
+Daniel Schwarz
+  "log-summary" option in cd-paranoia.
+
+Diego 'Flameeyes' Pettenò
+  patches to FreeBSD and making Gentoo-friendly
+
+Edd Barrett
+  Current OpenBSD driver (based on NetBSD driver)
+
+Frank Endres
+  mmc_get_disc_erasable
+
+Frantisek Dvorak <valtri at atlas.cz>:
+  bug reports and miscellaneous fixes
+
+Geoff Bailey
+  FreeBSD debugging & testing
+
+Heiner <h.eichmann at gmx.de>
+  FreeBSD CAM support and FreeBSD debugging & testing
+
+Ian MacIntosh
+  Sun-related things.
+
+Justin B. Ruggles <jruggle at earthlink.net>
+  SCSI MMC discmode determination via Read TOC.
+
+Justin F. Hallett <thesin at southofheaven.org>
+  Fink packaging and matters OSX
+
+Klaus-Hendrik Wolf
+
+  Correct some typos in "util.c".
+
+KO Myung-Hun <komh at chollian.net> <komh78 at gmail.com>
+  OS/2 Driver (since removed - see him for older versions)
+
+Kris Verbeeck <airborne at advalvas.be>:
+  CDDB library support from libcddb http://libcddb.sourceforge.net
+  Gentoo ebuild-file
+
+Leon Merten Lohse
+  Redo CD-Text handling
+
+Manfred Tremmel <Manfred.Tremmel at iiv.de>:
+  RPM spec file and inclusion of libcdio into
+  http://packman.links2linux.de/
+
+Mansour Gashasbi <gashasbi@gmail.com>
+  Security checks for heap and buffer overflows
+
+Michael Kukat <michael at unixiron.org>,
+  for the hints in extractnrg.pl
+
+Natalia Portillo
+  OSX BluRay support on OSX 10 and other OSX fixes
+
+Nicolas Boullis <nboullis at debian.org>
+  Build issues, library symbol versioning, Debian packaging and issues
+
+Nigel Pearson nigel at ind dot tansu dot com dot au
+  OSX 10 fixes
+
+Oldrich Strazovsky
+  Support ISRC in Image drivers
+
+Patrick Guimond
+  CD-Extra audio data boundaries
+
+Pete Batard
+  UDF, MinGW and Microsoft Visual C++ support. "offset" type fixes for
+  Joliet and Rock Ridge.
+
+Peter Hartley
+  Cross-compiling to mingw32
+
+Peter J. Creath
+  removal of libpopt, paranoia documentation, some bug fixes to
+  cd-* programs and the paranoia lib
+
+Steven M. Schultz <sms at 2BSD.COM>
+  All things BSDI and the use of a really fabulous Darwin G5 box.
+
+Svend S. Sorensen <ssorensen at fastmail.fm>
+  cdrdao TOC-reading and CDRWin CUE parsing code based on cuetools
+  http://cuetools.sourceforge.net/
+
+Thomas Schmitt
+  Recording and retrieval of SCSI sense reply. Write/burning interface.
+  MMC bug fixes.
+
+Robert Kausch
+  Portability fixes on Windows, and other OS's. Add mmc_get_track_isrc
+
+Robert William Fuller
+  Add get_track_pregap_lba(), get_track_pregap_lsn(). Section on "CD-DA pregap"
+  in libcdio manual.
+
+  Various fixes to Nero driver and cd-text for Nero.
+
+Rodrigo Cox
+  Fix incorrect track length calculation for the last track on CDs
+
+Rudi Heithbaum
+   Fix `-Wdiscarded-qualifiers` warning by retaining const qualifier from pointer
+
+Shiva Kiran Koninty
+  numerous mmc bug fixes and other libcdio improvements.
+
+Scot C. Bontrager
+  mmc routine to get the ISRC information on a CD that is in the q subchannel
+  but not showing up in the CDTEXT. Addition of this information to cd-info.
+
+UltraFuzzy
+  Correct USB device detection on MacOS.
+
+  Add cdio_get_device_fd()
+
+  Correct ISO 9660 timezone offsets
+
+xboxmediacenter team (www.xboxmediacenter.de)
+ X-Box detection and XDF filesystem things
+
+Yuxin Wang
+   Fix buffer overrun for Joliet filenames
