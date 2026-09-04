@@ -177,14 +177,14 @@ static void mVUemitSoftVisibleStatusWriteback(microVU& mVU, int result_offset,
 
 	if (cop2_opm_status)
 	{
-		xMOV(gprT1, ptr32[&mVU.regs().VI[REG_STATUS_FLAG].UL]);
-		xAND(gprT1, 0xff0);
 		xMOV(edx, resultPtr(offsetof(VuSoftFmacJitResult, mac_flags)));
 		xMOV(gprT2, ptr32[&s_vu_cop2_opm_old_mac]);
 		xAND(gprT2, 0x1111);
 		xOR(edx, gprT2);
 		mVUemitUpperStatusFromMacFlags(
 			edx, resultPtr(offsetof(VuSoftFmacJitResult, status_flags)));
+		xMOV(gprT1, ptr32[&mVU.regs().VI[REG_STATUS_FLAG].UL]);
+		xAND(gprT1, 0xff0);
 		xOR(gprT1, gprT2);
 		xMOV(edx, gprT2);
 		xSHL(edx, 6);
