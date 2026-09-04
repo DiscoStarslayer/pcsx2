@@ -1,14 +1,3 @@
-set(LIBCDIO_VERSION "2.4.1dev0")
-set(LIBCDIO_VERSION_NUM 20401)
-set(VERSION "${LIBCDIO_VERSION}")
-set(build "${CMAKE_SYSTEM_NAME}")
-
-configure_file(
-	"${CMAKE_CURRENT_SOURCE_DIR}/include/cdio/version.h.in"
-	"${CMAKE_CURRENT_BINARY_DIR}/include/cdio/version.h"
-	@ONLY
-)
-
 file(GLOB_RECURSE libcdio_sources CONFIGURE_DEPENDS
 	"${CMAKE_CURRENT_SOURCE_DIR}/lib/driver/*.c"
 )
@@ -20,7 +9,6 @@ target_compile_features(libcdio PRIVATE c_std_11)
 target_include_directories(libcdio
 	PUBLIC
 		"${CMAKE_CURRENT_SOURCE_DIR}/include"
-		"${CMAKE_CURRENT_BINARY_DIR}/include"
 	PRIVATE
 		"${CMAKE_CURRENT_SOURCE_DIR}/lib/driver"
 		"${CMAKE_CURRENT_SOURCE_DIR}/lib/driver/mmc"
@@ -66,4 +54,3 @@ else()
 endif()
 
 set_target_properties(libcdio PROPERTIES POSITION_INDEPENDENT_CODE ON)
-

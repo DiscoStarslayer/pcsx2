@@ -38,20 +38,15 @@ static const char* nameFromType(int type)
 	}
 }
 
-static std::unique_ptr<ThreadedFileReader> GetFileReader(const std::string& path, CueFileReader*& cue_reader)
+static std::unique_ptr<ThreadedFileReader> GetFileReader(const std::string& path)
 {
-	cue_reader = nullptr;
 	const std::string_view extension = Path::GetExtension(path);
 
 	if (StringUtil::compareNoCase(extension, "chd"))
 		return std::make_unique<ChdFileReader>();
 
 	if (StringUtil::compareNoCase(extension, "cue"))
-	{
-		auto reader = std::make_unique<CueFileReader>();
-		cue_reader = reader.get();
-		return reader;
-	}
+		return std::make_unique<CueFileReader>();
 
 	if (StringUtil::compareNoCase(extension, "cso") || StringUtil::compareNoCase(extension, "zso"))
 		return std::make_unique<CsoFileReader>();
@@ -195,19 +190,24 @@ void InputIsoFile::_init()
 	m_read_inprogress = false;
 	m_current_lsn = -1;
 	m_read_lsn = -1;
-	m_cue_reader = nullptr;
 	m_reader.reset();
+}
+
+const CueFileReader* InputIsoFile::GetCueReader() const
+{
+	return StringUtil::compareNoCase(Path::GetExtension(m_filename), "cue") ?
+	           static_cast<const CueFileReader*>(m_reader.get()) :
+	           nullptr;
 }
 
 bool InputIsoFile::Open(std::string srcfile, Error* error)
 {
 	Close();
 	m_filename = std::move(srcfile);
-	m_reader = GetFileReader(m_filename, m_cue_reader);
+	m_reader = GetFileReader(m_filename);
 	if (!m_reader->Open(m_filename, error))
 	{
 		m_reader.reset();
-		m_cue_reader = nullptr;
 		return false;
 	}
 

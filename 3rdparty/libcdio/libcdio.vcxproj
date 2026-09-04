@@ -31,7 +31,7 @@
     <ClCompile>
       <PreprocessorDefinitions>HAVE_CONFIG_H;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
-      <AdditionalIncludeDirectories>$(ProjectDir).vs;$(ProjectDir)pcsx2\include;$(ProjectDir)include;$(ProjectDir)lib\driver;$(ProjectDir)lib\driver\mmc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir).vs;$(ProjectDir)include;$(ProjectDir)lib\driver;$(ProjectDir)lib\driver\mmc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>

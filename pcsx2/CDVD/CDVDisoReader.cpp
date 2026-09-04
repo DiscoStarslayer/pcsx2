@@ -102,6 +102,13 @@ static s32 ISOreadSubQ(u32 lsn, cdvdSubQ* subq)
 		return -1;
 
 	std::memset(subq, 0, sizeof(*subq));
+	subq->adr = 1;
+	subq->ctrl = 4;
+	subq->trackNum = itob(1);
+	subq->trackIndex = itob(1);
+	u32 track_frames = lsn + 150;
+	u32 disc_frames = lsn + 300;
+
 	if (const CueFileReader* const cue = iso.GetCueReader())
 	{
 		const auto* const track = cue->FindTrack(lsn);
@@ -109,26 +116,16 @@ static s32 ISOreadSubQ(u32 lsn, cdvdSubQ* subq)
 			return -1;
 
 		const bool is_pregap = (lsn < track->index1_lsn);
-		const u32 relative_frames = is_pregap ? (track->index1_lsn - lsn) : (lsn - track->index1_lsn);
-
+		// Pregap countdowns need proper testing against physical hardware.
+		track_frames = is_pregap ? (track->index1_lsn - lsn) : (lsn - track->index1_lsn);
+		disc_frames = lsn + 150;
 		subq->ctrl = track->type;
-		subq->adr = 1;
 		subq->trackNum = itob(track->number);
 		subq->trackIndex = is_pregap ? 0 : 1;
-
-		FramesToMSF(relative_frames, &subq->trackM);
-		FramesToMSF(lsn + 150, &subq->discM);
-		return 0;
 	}
 
-	// fake it
-	subq->ctrl = 4;
-	subq->adr = 1;
-	subq->trackNum = itob(1);
-	subq->trackIndex = itob(1);
-	FramesToMSF(lsn + 150, &subq->trackM);
-	FramesToMSF(lsn + 300, &subq->discM);
-
+	FramesToMSF(track_frames, &subq->trackM);
+	FramesToMSF(disc_frames, &subq->discM);
 	return 0;
 }
 
@@ -343,7 +340,7 @@ static s32 ISOgetTOC(void* toc)
 		tocBuff[28] = itob(sec);
 		tocBuff[29] = itob(frm);
 
-		for (u8 track = diskInfo.strack; track <= diskInfo.etrack; track++)
+		for (u32 track = diskInfo.strack; track <= diskInfo.etrack; track++)
 		{
 			ISOgetTD(track, &trackInfo);
 			lba_to_msf(trackInfo.lsn, &min, &sec, &frm);

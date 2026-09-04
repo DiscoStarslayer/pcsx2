@@ -4,7 +4,6 @@
 #include "CDVD/CueFileReader.h"
 #include "CDVD/CDVD.h"
 
-#include "common/Assertions.h"
 #include "common/Error.h"
 #include "common/ProgressCallback.h"
 
@@ -18,28 +17,8 @@ namespace
 {
 	constexpr u32 CHUNK_SECTORS = 55;
 	constexpr u64 CHUNK_SIZE = static_cast<u64>(CHUNK_SECTORS) * CueFileReader::RAW_SECTOR_SIZE;
-
-	bool IsValidTOC(const track_t first, const track_t count, const lsn_t leadout)
-	{
-		return first != CDIO_INVALID_TRACK && count != CDIO_INVALID_TRACK && count && leadout > 0;
-	}
-
-	u8 GetTrackType(const track_format_t format)
-	{
-		switch (format)
-		{
-			case TRACK_FORMAT_AUDIO:
-				return CDVD_AUDIO_TRACK;
-			case TRACK_FORMAT_XA:
-			case TRACK_FORMAT_CDI:
-				return CDVD_MODE2_TRACK;
-			case TRACK_FORMAT_DATA:
-			case TRACK_FORMAT_PSX:
-				return CDVD_MODE1_TRACK;
-			default:
-				return 0;
-		}
-	}
+	constexpr u8 TRACK_TYPES[] = {
+		CDVD_AUDIO_TRACK, CDVD_MODE2_TRACK, CDVD_MODE2_TRACK, CDVD_MODE1_TRACK, CDVD_MODE1_TRACK};
 } // namespace
 
 CueFileReader::CueFileReader()
@@ -49,12 +28,11 @@ CueFileReader::CueFileReader()
 
 CueFileReader::~CueFileReader()
 {
-	pxAssert(!m_cdio);
+	Close();
 }
 
 bool CueFileReader::Open2(std::string filename, Error* error)
 {
-	Close2();
 	m_filename = std::move(filename);
 
 	m_cdio = cdio_open_cue(m_filename.c_str());
@@ -67,7 +45,7 @@ bool CueFileReader::Open2(std::string filename, Error* error)
 	const track_t first = cdio_get_first_track_num(m_cdio);
 	const track_t count = cdio_get_num_tracks(m_cdio);
 	const lsn_t leadout = cdio_get_track_lsn(m_cdio, CDIO_CDROM_LEADOUT_TRACK);
-	if (!IsValidTOC(first, count, leadout))
+	if (first == CDIO_INVALID_TRACK || count == CDIO_INVALID_TRACK || !count || leadout <= 0)
 	{
 		Error::SetStringFmt(error, "CUE sheet '{}' has an invalid table of contents", m_filename);
 		Close2();
@@ -79,7 +57,7 @@ bool CueFileReader::Open2(std::string filename, Error* error)
 	m_data_files.reserve(count);
 	for (track_t track = first; track < first + count; track++)
 	{
-		if (!AddTrack(track, leadout, error))
+		if (!AddTrack(track, error))
 		{
 			Close2();
 			return false;
@@ -89,20 +67,21 @@ bool CueFileReader::Open2(std::string filename, Error* error)
 	return true;
 }
 
-bool CueFileReader::AddTrack(const u8 number, const s32 leadout, Error* error)
+bool CueFileReader::AddTrack(const u8 number, Error* error)
 {
 	const lsn_t index1 = cdio_get_track_lsn(m_cdio, number);
 	const lsn_t pregap = cdio_get_track_pregap_lsn(m_cdio, number);
 	const lsn_t next_pregap = cdio_get_track_pregap_lsn(m_cdio, number + 1);
 	const lsn_t index0 = (pregap == CDIO_INVALID_LSN) ? index1 : pregap;
 	const lsn_t end = (next_pregap == CDIO_INVALID_LSN) ? cdio_get_track_lsn(m_cdio, number + 1) : next_pregap;
-	if (index0 < 0 || index1 < index0 || end <= index1 || end > leadout)
+	if (index0 < 0 || index1 < index0 || end <= index1 || end > static_cast<lsn_t>(m_blocks))
 	{
 		Error::SetStringFmt(error, "CUE sheet '{}' has invalid positions for track {}", m_filename, number);
 		return false;
 	}
 
-	const u8 type = GetTrackType(cdio_get_track_format(m_cdio, number));
+	const track_format_t format = cdio_get_track_format(m_cdio, number);
+	const u8 type = (format < TRACK_FORMAT_ERROR) ? TRACK_TYPES[format] : 0;
 	if (!type)
 	{
 		Error::SetStringFmt(error, "CUE sheet '{}' has an unsupported format for track {}", m_filename, number);
@@ -176,9 +155,9 @@ int CueFileReader::ReadChunk(void* dst, const s64 id)
 		return static_cast<int>(chunk.length);
 	}
 
-	return ReadSectors(dst, static_cast<u32>(chunk.offset / RAW_SECTOR_SIZE), chunk.length / RAW_SECTOR_SIZE) ?
-	           static_cast<int>(chunk.length) :
-	           0;
+	if (!ReadSectors(dst, static_cast<u32>(chunk.offset / RAW_SECTOR_SIZE), chunk.length / RAW_SECTOR_SIZE))
+		return 0;
+	return static_cast<int>(chunk.length);
 }
 
 void CueFileReader::Close2()

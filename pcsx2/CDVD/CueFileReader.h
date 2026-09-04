@@ -55,6 +55,6 @@ public:
 protected:
 	u64 GetSize() const { return static_cast<u64>(m_blocks) * RAW_SECTOR_SIZE; }
 
-	bool AddTrack(u8 number, s32 leadout, Error* error);
+	bool AddTrack(u8 number, Error* error);
 	bool ReadSectors(void* dst, u32 lsn, u32 count) const;
 };

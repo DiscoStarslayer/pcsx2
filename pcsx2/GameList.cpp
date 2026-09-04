@@ -269,8 +269,6 @@ UnorderedStringSet GameList::FindCueDataFiles(const FileSystem::FindResultsArray
 
 		for (const std::string& path : cue.GetDataFiles())
 			paths.emplace(GetPathKey(path));
-
-		cue.Close();
 	}
 
 	return paths;

@@ -24,14 +24,16 @@
    (*.cue).
 */
 #include "portable.h"
-#include "image.h"
+#include "_cdio_stdio.h"
 #include "cdio_assert.h"
 #include "cdio_private.h"
 #include "cdtext_private.h"
-#include "_cdio_stdio.h"
+#include "image.h"
 
+#include <cdio/bincue.h>
 #include <cdio/logging.h>
 #include <cdio/track.h>
+#include <cdio/utf8.h>
 #include <cdio/util.h>
 #include <cdio/version.h>
 
@@ -53,27 +55,11 @@
 #ifdef HAVE_GLOB_H
 #include <glob.h>
 #endif
-#ifdef HAVE_INTTYPES_H
-#include <inttypes.h>
-#else
-#define PRId64 "lld"
-#endif
 #ifdef HAVE_WINDOWS_H
 #include <windows.h>
 #endif
 
 #include <ctype.h>
-
-#include <cdio/logging.h>
-#include <cdio/util.h>
-#include <cdio/utf8.h>
-#include <cdio/version.h>
-#include <cdio/bincue.h>
-
-#include "image.h"
-#include "cdio_assert.h"
-#include "cdio_private.h"
-#include "_cdio_stdio.h"
 
 /* reader */
 
@@ -89,7 +75,7 @@
 static lsn_t get_disc_last_lsn_bincue(void *p_user_data);
 #include "image_common.h"
 static bool parse_cuefile(_img_private_t *cd, const char *toc_name);
-static bool layout_cue_tracks(_img_private_t *cd, cdio_log_level_t log_level);
+static bool layout_cue_tracks(_img_private_t *cd);
 
 /**
   Initialize image structures.
@@ -135,35 +121,26 @@ static off_t
 _lseek_bincue (void *p_user_data, off_t offset, int whence)
 {
   _img_private_t *p_env = p_user_data;
-  unsigned int i_track;
 
   if (whence != SEEK_SET || offset < 0)
     return DRIVER_OP_ERROR;
 
-  p_env->pos.lba = 0;
-  for (i_track=0; i_track<p_env->gen.i_tracks; i_track++) {
-    track_info_t  *this_track;
-
-    if (i_track > CDIO_CD_MAX_TRACKS) {
-      cdio_warn ("Track number %d is too large; maximum track number is %d.", i_track, CDIO_CD_MAX_TRACKS);
-      return DRIVER_OP_ERROR;
+  for (unsigned int i = 0; i < p_env->gen.i_tracks; i++) {
+    track_info_t *track = &p_env->tocent[i];
+    const off_t track_size = track->sec_count * track->datasize;
+    if (offset >= track_size) {
+      offset -= track_size;
+      continue;
     }
 
-    this_track=&(p_env->tocent[i_track]);
-
-    p_env->pos.index = i_track;
-    if ( (this_track->sec_count*this_track->datasize) >= offset) {
-      int blocks            = (int) (offset / this_track->datasize);
-      int rem               = (int) (offset % this_track->datasize);
-      off_t block_offset    = blocks * this_track->blocksize;
-      p_env->pos.buff_offset = rem;
-      p_env->pos.lba        = cdio_lba_to_lsn(this_track->start_lba) +
-                              (lba_t) blocks;
-      return cdio_stream_seek(this_track->data_source,
-                              this_track->offset + block_offset +
-                              this_track->datastart + rem, SEEK_SET);
-    }
-    offset        -= this_track->sec_count*this_track->datasize;
+    const int blocks = (int)(offset / track->datasize);
+    const int rem = (int)(offset % track->datasize);
+    p_env->pos.index = i;
+    p_env->pos.buff_offset = rem;
+    p_env->pos.lba = cdio_lba_to_lsn(track->start_lba) + blocks;
+    return cdio_stream_seek(track->data_source,
+                            track->offset + blocks * track->blocksize +
+                            track->datastart + rem, SEEK_SET);
   }
 
   cdio_warn ("Seeking outside range of disk image.");
@@ -249,76 +226,74 @@ get_disc_last_lsn_bincue (void *p_user_data)
   images.
  */
 static bool
-layout_cue_tracks (_img_private_t *cd, cdio_log_level_t log_level)
+layout_cue_tracks (_img_private_t *cd)
 {
-  lsn_t disc_cursor = 0;
+  lsn_t disc_lsn = 0;
   unsigned int i;
 
   for (i = 0; i < cd->gen.i_tracks; i++) {
     track_info_t *track = &cd->tocent[i];
-    lsn_t source_index1;
-    lsn_t source_index0;
-    lsn_t source_end;
-    lsn_t source_sectors;
-    lsn_t index1_offset;
-    off_t source_size;
 
     if (!track->filename || !track->data_source || !track->start_lba ||
         !track->blocksize) {
-      cdio_log(log_level, "track %u has incomplete source information", i + 1);
+      cdio_warn ("track %u has incomplete source information", i + 1);
       return false;
     }
 
-    source_size = cdio_stream_stat(track->data_source);
-    if (source_size <= 0 || source_size % track->blocksize != 0) {
-      cdio_log(log_level,
-               "image %s size (%" PRId64 ") is not a positive multiple of blocksize (%u)",
-               track->filename, (int64_t)source_size, track->blocksize);
+    const off_t file_size = cdio_stream_stat(track->data_source);
+    if (file_size <= 0) {
+      cdio_warn ("image %s is empty", track->filename);
       return false;
     }
 
-    source_sectors = (lsn_t)(source_size / track->blocksize);
-    source_index1 = cdio_lba_to_lsn(track->start_lba);
-    source_index0 = track->pregap ? cdio_lba_to_lsn(track->pregap) :
-                                    source_index1;
-    if (source_index0 < 0 || source_index1 < source_index0 ||
-        source_index1 >= source_sectors) {
-      cdio_log(log_level, "track %u has invalid INDEX positions", i + 1);
+    const lsn_t file_sectors = (lsn_t)(file_size / track->blocksize);
+    const lsn_t index1 = cdio_lba_to_lsn(track->start_lba);
+    const lsn_t index0 = track->pregap ? cdio_lba_to_lsn(track->pregap) : index1;
+    if (index0 < 0 || index1 < index0 || index1 >= file_sectors) {
+      cdio_warn ("track %u has invalid INDEX positions", i + 1);
       return false;
     }
 
-    source_end = source_sectors;
+    lsn_t file_end = file_sectors;
     if (i + 1 < cd->gen.i_tracks && cd->tocent[i + 1].filename &&
         strcmp(track->filename, cd->tocent[i + 1].filename) == 0) {
       const track_info_t *next_track = &cd->tocent[i + 1];
-      source_end = next_track->pregap ? cdio_lba_to_lsn(next_track->pregap) :
-                                       cdio_lba_to_lsn(next_track->start_lba);
+      file_end = cdio_lba_to_lsn(next_track->pregap ?
+                                 next_track->pregap : next_track->start_lba);
     }
 
-    if (source_end <= source_index0 || source_end > source_sectors) {
-      cdio_log(log_level, "track %u extends outside image %s", i + 1,
-               track->filename);
+    if (file_end <= index0 || file_end > file_sectors) {
+      cdio_warn ("track %u extends outside image %s", i + 1, track->filename);
       return false;
     }
 
-    index1_offset = source_index1 - source_index0;
-    track->offset = (off_t)source_index0 * track->blocksize;
-    track->source_start_lba = cdio_lsn_to_lba(disc_cursor + track->silence);
-    track->source_end_lba = track->source_start_lba +
-                            (source_end - source_index0);
-    track->pregap = (track->silence || index1_offset) ?
-                    cdio_lsn_to_lba(disc_cursor) : 0;
-    track->start_lba = track->source_start_lba + index1_offset;
-    track->sec_count = source_end - source_index1;
+    const lsn_t index1_offset = index1 - index0;
+    track->offset = (off_t)index0 * track->blocksize;
+    track->source_start = disc_lsn + track->silence;
+    track->source_end = track->source_start + file_end - index0;
+    track->pregap = (track->silence || index1_offset) ? cdio_lsn_to_lba(disc_lsn) : 0;
+    track->start_lba = cdio_lsn_to_lba(track->source_start + index1_offset);
+    track->sec_count = file_end - index1;
     cdio_lba_to_msf(track->start_lba, &track->start_msf);
 
-    disc_cursor = cdio_lba_to_lsn(track->source_end_lba) + track->postgap;
+    disc_lsn = track->source_end + track->postgap;
   }
 
-  cd->tocent[cd->gen.i_tracks].start_lba = cdio_lsn_to_lba(disc_cursor);
+  cd->tocent[cd->gen.i_tracks].start_lba = cdio_lsn_to_lba(disc_lsn);
   cdio_lba_to_msf(cd->tocent[cd->gen.i_tracks].start_lba,
                   &cd->tocent[cd->gen.i_tracks].start_msf);
   return true;
+}
+
+static bool
+parse_gap (char **saveptr, lba_t *gap)
+{
+  const char *value = strtok_r(NULL, " \t\n\r", saveptr);
+  if (!value || strtok_r(NULL, " \t\n\r", saveptr))
+    return false;
+
+  *gap = cdio_mmssff_to_lba(value);
+  return *gap != CDIO_INVALID_LBA;
 }
 
 #define MAXLINE 4096            /* maximum line length + 1 */
@@ -333,7 +308,6 @@ parse_cuefile (_img_private_t *cd, const char *psz_cue_name)
   int          i = -1;              /* Position in tocent. Same as
 				       cd->gen.i_tracks - 1 */
   char *psz_keyword, *psz_field, *psz_cue_name_dup;
-  char *psz_current_filename = NULL;
   cdio_log_level_t log_level = (NULL == cd) ? CDIO_LOG_INFO : CDIO_LOG_WARN;
   cdtext_field_t cdtext_key;
   char *saveptr;
@@ -341,6 +315,7 @@ parse_cuefile (_img_private_t *cd, const char *psz_cue_name)
   /* The below declarations may be unique to this image-parse routine. */
   int start_index;
   bool b_first_index_for_track=false;
+  bool have_file=false;
 
   if (NULL == psz_cue_name)
     return false;
@@ -504,16 +479,18 @@ parse_cuefile (_img_private_t *cd, const char *psz_cue_name)
         if (NULL != (psz_field = strtok_r(NULL, "\"\t\n\r", &saveptr))) {
           char *dirname = cdio_dirname(psz_cue_name);
           char *filename = cdio_abspath(dirname, psz_field);
-          free(psz_current_filename);
-          psz_current_filename = strdup(filename);
+          if (!filename) {
+            free(dirname);
+            goto err_exit;
+          }
+          have_file = true;
           if (cd) {
             CDIO_FREE_IF_NOT_NULL(cd->gen.source_name);
-            cd->gen.source_name = strdup(filename);
+            cd->gen.source_name = filename;
+          } else {
+            free(filename);
           }
-          free(filename);
           free(dirname);
-          if (!psz_current_filename)
-            goto err_exit;
         } else {
           goto format_error;
         }
@@ -788,17 +765,17 @@ parse_cuefile (_img_private_t *cd, const char *psz_cue_name)
             goto err_exit;
           }
 
+          if (!have_file) {
+            cdio_log(log_level, "%s line %d: TRACK has no preceding FILE",
+                     psz_cue_name, i_line);
+            goto err_exit;
+          }
           if (cd) {
-            if (!psz_current_filename) {
-              cdio_log(log_level, "%s line %d: TRACK has no preceding FILE",
-                       psz_cue_name, i_line);
-              goto err_exit;
-            }
-            this_track->filename = strdup(psz_current_filename);
-            this_track->data_source = cdio_stdio_new(psz_current_filename);
+            this_track->filename = strdup(cd->gen.source_name);
+            this_track->data_source = cdio_stdio_new(cd->gen.source_name);
             if (!this_track->filename || !this_track->data_source) {
               cdio_log(log_level, "%s line %d: can't open file `%s' for reading",
-                       psz_cue_name, i_line, psz_current_filename);
+                       psz_cue_name, i_line, cd->gen.source_name);
               goto err_exit;
             }
           }
@@ -840,49 +817,25 @@ parse_cuefile (_img_private_t *cd, const char *psz_cue_name)
 
         /* PREGAP MM:SS:FF */
       } else if (0 == strcmp("PREGAP", psz_keyword)) {
-        if (0 <= i) {
-          if (NULL != (psz_field = strtok_r(NULL, " \t\n\r", &saveptr))) {
-            lba_t lba = cdio_mmssff_to_lba (psz_field);
-            if (CDIO_INVALID_LBA == lba) {
-              cdio_log(log_level, "%s line %d: after word PREGAP:",
-                       psz_cue_name, i_line);
-              cdio_log(log_level, "Invalid MSF string %s",
-                       psz_field);
-              goto err_exit;
-            }
-            if (cd) {
-              cd->tocent[i].silence = lba;
-            }
-          } else {
-            goto format_error;
-          } if (NULL != strtok_r(NULL, " \t\n\r", &saveptr)) {
-            goto format_error;
-          }
-        } else {
+        if (i < 0)
           goto in_global_section;
-        }
+
+        lba_t gap;
+        if (!parse_gap(&saveptr, &gap))
+          goto format_error;
+        if (cd)
+          cd->tocent[i].silence = gap;
 
         /* POSTGAP MM:SS:FF */
       } else if (0 == strcmp("POSTGAP", psz_keyword)) {
-        if (0 <= i) {
-          if (NULL != (psz_field = strtok_r(NULL, " \t\n\r", &saveptr))) {
-            lba_t lba = cdio_mmssff_to_lba (psz_field);
-            if (CDIO_INVALID_LBA == lba) {
-              cdio_log(log_level, "%s line %d: after word POSTGAP:",
-                       psz_cue_name, i_line);
-              cdio_log(log_level, "Invalid MSF string %s", psz_field);
-              goto err_exit;
-            }
-            if (cd)
-              cd->tocent[i].postgap = lba;
-          } else {
-            goto format_error;
-          }
-          if (NULL != strtok_r(NULL, " \t\n\r", &saveptr))
-            goto format_error;
-        } else {
+        if (i < 0)
           goto in_global_section;
-        }
+
+        lba_t gap;
+        if (!parse_gap(&saveptr, &gap))
+          goto format_error;
+        if (cd)
+          cd->tocent[i].postgap = gap;
 
         /* INDEX [##] MM:SS:FF */
       } else if (0 == strcmp ("INDEX", psz_keyword)) {
@@ -972,12 +925,11 @@ parse_cuefile (_img_private_t *cd, const char *psz_cue_name)
   }
 
   if (NULL != cd) {
-    if (!layout_cue_tracks(cd, log_level))
+    if (!layout_cue_tracks(cd))
       goto err_exit;
     cd->gen.toc_init = true;
   }
 
-  free(psz_current_filename);
   fclose (fp);
   return true;
 
@@ -996,7 +948,6 @@ parse_cuefile (_img_private_t *cd, const char *psz_cue_name)
            psz_cue_name, i_line, psz_keyword);
 
  err_exit:
-  free(psz_current_filename);
   fclose (fp);
   return false;
 
@@ -1005,17 +956,16 @@ parse_cuefile (_img_private_t *cd, const char *psz_cue_name)
 static track_info_t *
 get_track_for_lsn_bincue (_img_private_t *p_env, lsn_t lsn)
 {
-  const lba_t lba = cdio_lsn_to_lba(lsn);
   unsigned int i = p_env->gen.i_tracks;
 
-  if (lsn < 0 || lba >= p_env->tocent[p_env->gen.i_tracks].start_lba)
+  if (lsn < 0 || lsn >= cdio_lba_to_lsn(p_env->tocent[i].start_lba))
     return NULL;
 
   while (i > 0) {
     track_info_t *track = &p_env->tocent[--i];
-    const lba_t track_start = track->pregap ? track->pregap :
-                                                track->start_lba;
-    if (lba >= track_start)
+    const lsn_t start = cdio_lba_to_lsn(track->pregap ?
+                                        track->pregap : track->start_lba);
+    if (lsn >= start)
       return track;
   }
 
@@ -1026,13 +976,11 @@ static driver_return_code_t
 read_raw_sector_bincue (_img_private_t *p_env, void *data, lsn_t lsn)
 {
   track_info_t *track = get_track_for_lsn_bincue(p_env, lsn);
-  const lba_t lba = cdio_lsn_to_lba(lsn);
-  off_t source_offset;
 
   if (!track)
     return DRIVER_OP_ERROR;
 
-  if (lba < track->source_start_lba || lba >= track->source_end_lba) {
+  if (lsn < track->source_start || lsn >= track->source_end) {
     memset(data, 0, CDIO_CD_FRAMESIZE_RAW);
     return DRIVER_OP_SUCCESS;
   }
@@ -1040,14 +988,27 @@ read_raw_sector_bincue (_img_private_t *p_env, void *data, lsn_t lsn)
   if (track->blocksize != CDIO_CD_FRAMESIZE_RAW)
     return DRIVER_OP_UNSUPPORTED;
 
-  source_offset = track->offset +
-                  (off_t)(lba - track->source_start_lba) * track->blocksize;
+  const off_t source_offset = track->offset +
+                              (off_t)(lsn - track->source_start) * track->blocksize;
   if (cdio_stream_seek(track->data_source, source_offset, SEEK_SET) != 0)
     return DRIVER_OP_ERROR;
 
   return cdio_stream_read(track->data_source, data,
                           CDIO_CD_FRAMESIZE_RAW, 1) ==
          CDIO_CD_FRAMESIZE_RAW ? DRIVER_OP_SUCCESS : DRIVER_OP_ERROR;
+}
+
+static driver_return_code_t
+read_raw_sectors_bincue (_img_private_t *p_env, void *data, lsn_t lsn,
+                         uint32_t blocks)
+{
+  for (uint32_t i = 0; i < blocks; i++) {
+    driver_return_code_t ret = read_raw_sector_bincue(
+      p_env, (uint8_t *)data + ((size_t)i * CDIO_CD_FRAMESIZE_RAW), lsn + i);
+    if (ret != DRIVER_OP_SUCCESS)
+      return ret;
+  }
+  return DRIVER_OP_SUCCESS;
 }
 
 const char *
@@ -1070,25 +1031,17 @@ driver_return_code_t
 cdio_bincue_read_raw_sectors (const CdIo_t *p_cdio, void *p_buf,
                               lsn_t i_lsn, uint32_t i_blocks)
 {
-  uint32_t i;
-
   if (!p_cdio || p_cdio->driver_id != DRIVER_BINCUE)
     return DRIVER_OP_UNSUPPORTED;
-  if (!p_buf || i_lsn < 0 || i_blocks == 0)
-    return i_blocks == 0 ? DRIVER_OP_SUCCESS : DRIVER_OP_ERROR;
-  if (i_lsn + i_blocks >
-      cdio_get_track_lsn(p_cdio, CDIO_CDROM_LEADOUT_TRACK))
+  if (i_blocks == 0)
+    return DRIVER_OP_SUCCESS;
+
+  const lsn_t leadout = cdio_get_track_lsn(p_cdio, CDIO_CDROM_LEADOUT_TRACK);
+  if (!p_buf || i_lsn < 0 || i_lsn >= leadout ||
+      i_blocks > (uint32_t)(leadout - i_lsn))
     return DRIVER_OP_ERROR;
 
-  for (i = 0; i < i_blocks; i++) {
-    driver_return_code_t ret = read_raw_sector_bincue(
-      p_cdio->env,
-      (uint8_t *)p_buf + ((size_t)i * CDIO_CD_FRAMESIZE_RAW), i_lsn + i);
-    if (ret != DRIVER_OP_SUCCESS)
-      return ret;
-  }
-
-  return DRIVER_OP_SUCCESS;
+  return read_raw_sectors_bincue(p_cdio->env, p_buf, i_lsn, i_blocks);
 }
 
 /**
@@ -1099,18 +1052,7 @@ static driver_return_code_t
 _read_audio_sectors_bincue (void *p_user_data, void *data, lsn_t lsn,
                           unsigned int nblocks)
 {
-  _img_private_t *p_env = p_user_data;
-  unsigned int i;
-
-  for (i = 0; i < nblocks; i++) {
-    driver_return_code_t ret = read_raw_sector_bincue(
-      p_env, (uint8_t *)data + ((size_t)i * CDIO_CD_FRAMESIZE_RAW),
-      lsn + i);
-    if (ret != DRIVER_OP_SUCCESS)
-      return ret;
-  }
-
-  return DRIVER_OP_SUCCESS;
+  return read_raw_sectors_bincue(p_user_data, data, lsn, nblocks);
 }
 
 /**
@@ -1128,7 +1070,7 @@ _read_mode1_sector_bincue (void *p_user_data, void *data, lsn_t lsn,
     return ret;
 
   memcpy (data, buf + CDIO_CD_SYNC_SIZE + CDIO_CD_HEADER_SIZE,
-          b_form2 ? M2RAW_SECTOR_SIZE: CDIO_CD_FRAMESIZE);
+          b_form2 ? M2RAW_SECTOR_SIZE : CDIO_CD_FRAMESIZE);
 
   return DRIVER_OP_SUCCESS;
 }

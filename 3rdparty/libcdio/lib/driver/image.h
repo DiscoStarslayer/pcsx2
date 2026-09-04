@@ -66,9 +66,9 @@ typedef struct {
                                      each track would then have a different
                                      offset.
                                 */
-  lba_t          source_start_lba; /**< First disc LBA backed by data_source. */
-  lba_t          source_end_lba;   /**< One-past-last disc LBA backed by data_source. */
-  lba_t          postgap;          /**< Number of synthetic sectors after the source. */
+  lsn_t          source_start;  /**< First disc sector backed by data_source. */
+  lsn_t          source_end;    /**< One-past-last disc sector backed by data_source. */
+  lsn_t          postgap;       /**< Synthetic sectors after the source. */
   track_format_t track_format;
   bool           track_green;
 
