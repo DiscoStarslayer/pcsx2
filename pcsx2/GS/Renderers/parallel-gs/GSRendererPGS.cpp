@@ -944,15 +944,17 @@ void GSRendererPGS::VSync(u32 field, bool registers_written, bool refresh_frame)
 			else
 				new_height = uint32_t(std::round(float(output_width) / game_aspect));
 
-			// This won't preserve the aspect ratio necessarily, but eh.
 			if (GSConfig.IntegerScaling)
 			{
-				new_width -= new_width % vsync.image->get_width();
-				new_height -= new_height % vsync.image->get_height();
-				if (new_width == 0)
-					new_width = output_width;
-				if (new_height == 0)
-					new_height = output_height;
+				const float scale = (vsync.image->get_width() >= vsync.image->get_height()) ?
+				                        static_cast<float>(new_width) / vsync.image->get_width() :
+				                        static_cast<float>(new_height) / vsync.image->get_height();
+				if (scale > 1.0f)
+				{
+					const float adjust = std::floor(scale) / scale;
+					new_width = std::max(1u, static_cast<uint32_t>(std::round(new_width * adjust)));
+					new_height = std::max(1u, static_cast<uint32_t>(std::round(new_height * adjust)));
+				}
 			}
 
 			vp_offset_x = std::round(0.5f * float(output_width - new_width));
