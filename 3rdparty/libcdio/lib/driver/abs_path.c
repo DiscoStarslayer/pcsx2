@@ -35,18 +35,14 @@
 #ifdef __CYGWIN__
 # undef DOSISH
 #endif
-#if defined __CYGWIN__ || defined DOSISH
+#if defined _WIN32 || defined __CYGWIN__ || defined DOSISH
 # define DOSISH_UNC
 # define DOSISH_DRIVE_LETTER
-# define FILE_ALT_SEPARATOR '\\'
+# define CDIO_FILE_ALT_SEPARATOR '\\'
 #endif
 
 #ifndef CDIO_FILE_SEPARATOR
 # define CDIO_FILE_SEPARATOR '/'
-#endif
-
-#if defined __CYGWIN__ || defined DOSISH
-# define FILE_ALT_SEPARATOR '\\'
 #endif
 
 #ifdef CDIO_FILE_ALT_SEPARATOR
@@ -95,6 +91,12 @@ cdio_abspath(const char *cwd, const char *fname)
 {
     if (isdirsep(*fname))
       return strdup(fname);
+#ifdef DOSISH_DRIVE_LETTER
+    else if (((fname[0] >= 'A' && fname[0] <= 'Z') ||
+              (fname[0] >= 'a' && fname[0] <= 'z')) &&
+             fname[1] == ':' && isdirsep(fname[2]))
+      return strdup(fname);
+#endif
     else {
       size_t len   = strlen(cwd) + strlen(fname) + 2;
       char* result = calloc(sizeof(char), len);
